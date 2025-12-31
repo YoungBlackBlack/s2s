@@ -1,0 +1,22 @@
+# Vercel 构建忽略文件
+# 明确告诉 Vercel 这是一个 Node.js 前端项目，不是 Python 项目
+
+# Python 相关文件（如果存在）
+*.py
+requirements.txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+
+# ws-proxy 目录（这是独立的 Node.js 服务，部署在 Railway/Render）
+ws-proxy/
+
+# 其他不需要的文件
+.DS_Store
+*.log
+
