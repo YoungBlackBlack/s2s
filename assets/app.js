@@ -296,26 +296,29 @@ async function init() {
 async function loadProtobuf() {
     try {
         // 优先尝试加载预构建的 JSON 格式（性能更好，单次请求）
-        const response = await fetch('assets/protos/bundle.json');
+        const response = await fetch('/assets/protos/bundle.json');
         if (response.ok) {
             const json = await response.json();
             root = protobuf.Root.fromJSON(json);
-            console.log('Protobuf (JSON) 加载成功');
+            console.log('✅ Protobuf (JSON) 加载成功');
+            return;
         } else {
-            // 如果 JSON 加载失败，回退到动态加载 .proto 文件
-            console.warn('无法加载 bundle.json，回退到动态加载 .proto 文件');
-            root = await protobuf.load([
-                'protos/common/events.proto',
-                'protos/common/rpcmeta.proto',
-                'protos/products/understanding/base/au_base.proto',
-                'protos/products/understanding/ast/ast_service.proto'
-            ]);
-            root.resolveAll();
-            console.log('Protobuf (.proto) 加载成功');
+            console.warn('⚠️ 无法加载 bundle.json，尝试动态加载 .proto 文件');
         }
+        
+        // 如果 JSON 加载失败，回退到动态加载 .proto 文件（使用绝对路径）
+        root = await protobuf.load([
+            '/protos/common/events.proto',
+            '/protos/common/rpcmeta.proto',
+            '/protos/products/understanding/base/au_base.proto',
+            '/protos/products/understanding/ast/ast_service.proto'
+        ]);
+        root.resolveAll();
+        console.log('✅ Protobuf (.proto) 加载成功');
     } catch (error) {
-        console.error('Protobuf 加载失败:', error);
-        console.log('使用简化的消息处理方式');
+        console.error('❌ Protobuf 加载失败:', error);
+        console.warn('⚠️ 将使用 JSON 格式发送消息（可能无法正常工作）');
+        console.warn('💡 提示：请运行 npm run build-protos 生成 bundle.json 文件');
         root = null;
     }
 }
@@ -582,24 +585,30 @@ function sendFinishSession() {
 // ===== 发送Protobuf消息 =====
 function sendProtobufMessage(message, eventType) {
     try {
-        if (root) {
-            // 使用Protobuf编码
-            const TranslateRequest = root.lookupType('data.speech.ast.TranslateRequest');
-            const errMsg = TranslateRequest.verify(message);
-            if (errMsg) throw Error(errMsg);
-            
-            const buffer = TranslateRequest.encode(message).finish();
-            ws.send(buffer);
-        } else {
-            // 临时方案：使用JSON格式（仅用于开发测试）
-            // 注意：实际API需要Protobuf二进制格式，此方案可能无法正常工作
-            console.warn('使用JSON格式发送消息（临时方案，可能无法正常工作）');
-            const jsonStr = JSON.stringify(message);
-            const buffer = new TextEncoder().encode(jsonStr);
-            ws.send(buffer);
+        if (!root) {
+            console.error('❌ Protobuf 未加载，无法发送消息');
+            updateStatus('错误：Protobuf 未加载，请刷新页面重试', 'error');
+            return;
         }
+        
+        // 使用Protobuf编码
+        const TranslateRequest = root.lookupType('data.speech.ast.TranslateRequest');
+        if (!TranslateRequest) {
+            throw new Error('找不到 TranslateRequest 类型定义');
+        }
+        
+        const errMsg = TranslateRequest.verify(message);
+        if (errMsg) {
+            console.error('消息验证失败:', errMsg);
+            throw new Error(errMsg);
+        }
+        
+        const buffer = TranslateRequest.encode(message).finish();
+        ws.send(buffer);
+        console.log('✅ Protobuf 消息发送成功');
     } catch (error) {
-        console.error('发送消息失败:', error);
+        console.error('❌ 发送消息失败:', error);
+        updateStatus('发送消息失败: ' + error.message, 'error');
     }
 }
 
