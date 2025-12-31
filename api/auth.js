@@ -1,7 +1,7 @@
 // Vercel Serverless Function
 // 提供鉴权信息给前端，保护敏感信息
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // 只允许 GET 请求
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
