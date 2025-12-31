@@ -521,10 +521,11 @@ function parseProtobufMessage(data) {
 
 // ===== 处理WebSocket消息 =====
 function handleWebSocketMessage(data) {
-    const message = parseProtobufMessage(data);
-    if (!message) return;
-    
-    const eventType = message.event;
+    try {
+        const message = parseProtobufMessage(data);
+        if (!message) return;
+        
+        const eventType = message.event;
         
         switch (eventType) {
             case 150: // SessionStarted
