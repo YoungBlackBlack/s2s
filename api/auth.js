@@ -8,9 +8,9 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // 从环境变量读取鉴权信息
+    // 从环境变量读取鉴权信息（支持多种命名格式）
     const appId = process.env.APP_ID;
-    const accessToken = process.env.ACCESS_TOKEN || process.env.ACCESS_KEY; // 支持两种命名，ACCESS_TOKEN是正确名称
+    const accessToken = process.env.ACCESS_TOKEN || process.env.Access_Token || process.env.ACCESS_KEY; // 支持多种命名格式
 
     // 检查环境变量是否配置
     if (!appId || !accessToken) {
