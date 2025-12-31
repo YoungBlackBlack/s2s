@@ -1,7 +1,7 @@
 // ===== 同声传译 Demo - 主应用逻辑 =====
 
 // 全局变量
-let protobuf = null;
+// protobuf 由 CDN 加载（window.protobuf），不要重新声明
 let root = null;
 let ws = null;
 let audioContext = null;
