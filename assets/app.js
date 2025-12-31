@@ -889,95 +889,139 @@ function convertToPCM(float32Array) {
     return int16Array.buffer;
 }
 
-// ===== 播放音频 =====
-// 音频播放队列，确保按顺序播放
-const audioQueue = [];
-let isPlayingAudio = false;
-let playbackAudioContext = null;
-
-function playAudio(audioData) {
-    try {
-        // audioData 是 base64 编码的字符串，需要先解码
-        let rawData;
-        if (typeof audioData === 'string') {
-            // Base64 解码
-            const binaryString = atob(audioData);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+// ===== 流式音频播放器 =====
+// 使用缓冲合并来减少卡顿
+const audioPlayer = {
+    context: null,
+    buffer: [],           // 原始音频数据缓冲
+    isPlaying: false,
+    nextPlayTime: 0,      // 下一个音频块应该播放的时间
+    sampleRate: 24000,
+    bufferThreshold: 3,   // 累积3个块后开始播放，减少卡顿
+    
+    init() {
+        if (!this.context || this.context.state === 'closed') {
+            this.context = new AudioContext({ sampleRate: this.sampleRate });
+        }
+        if (this.context.state === 'suspended') {
+            this.context.resume();
+        }
+    },
+    
+    // 添加音频数据到缓冲
+    addData(audioData) {
+        try {
+            let rawData;
+            if (typeof audioData === 'string') {
+                // Base64 解码
+                const binaryString = atob(audioData);
+                rawData = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    rawData[i] = binaryString.charCodeAt(i);
+                }
+            } else if (audioData instanceof ArrayBuffer) {
+                rawData = new Uint8Array(audioData);
+            } else if (audioData instanceof Uint8Array) {
+                rawData = audioData;
+            } else {
+                console.error('不支持的音频数据格式:', typeof audioData);
+                return;
             }
-            rawData = bytes;
-        } else if (audioData instanceof ArrayBuffer) {
-            rawData = new Uint8Array(audioData);
-        } else if (audioData instanceof Uint8Array) {
-            rawData = audioData;
-        } else {
-            console.error('不支持的音频数据格式:', typeof audioData);
+            
+            this.buffer.push(rawData);
+            
+            // 如果缓冲达到阈值或者已经在播放，处理音频
+            if (this.buffer.length >= this.bufferThreshold || this.isPlaying) {
+                this.processBuffer();
+            }
+        } catch (error) {
+            console.error('添加音频数据失败:', error);
+        }
+    },
+    
+    // 处理缓冲区，合并并播放
+    processBuffer() {
+        if (this.buffer.length === 0) return;
+        
+        this.init();
+        
+        // 合并所有缓冲的数据
+        const totalLength = this.buffer.reduce((sum, arr) => sum + arr.length, 0);
+        const merged = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const arr of this.buffer) {
+            merged.set(arr, offset);
+            offset += arr.length;
+        }
+        this.buffer = [];
+        
+        // 解码音频数据
+        // 尝试 float32 格式（每样本4字节）
+        const numSamples = Math.floor(merged.length / 4);
+        if (numSamples < 10) return; // 数据太少，跳过
+        
+        const audioBuffer = this.context.createBuffer(1, numSamples, this.sampleRate);
+        const channelData = audioBuffer.getChannelData(0);
+        const view = new DataView(merged.buffer, merged.byteOffset, merged.byteLength);
+        
+        let hasValidData = false;
+        for (let i = 0; i < numSamples; i++) {
+            const sample = view.getFloat32(i * 4, true);
+            // 检查是否是有效的 float32 数据
+            if (!isNaN(sample) && isFinite(sample) && Math.abs(sample) <= 1.5) {
+                channelData[i] = Math.max(-1, Math.min(1, sample));
+                if (Math.abs(sample) > 0.001) hasValidData = true;
+            } else {
+                channelData[i] = 0;
+            }
+        }
+        
+        if (!hasValidData) {
+            console.warn('⚠️ 音频数据可能格式不正确');
             return;
         }
         
-        console.log('🎵 收到音频数据, 字节数:', rawData.length);
+        // 创建音频源并播放
+        const source = this.context.createBufferSource();
+        source.buffer = audioBuffer;
         
-        // 添加到播放队列
-        audioQueue.push(rawData);
+        // 添加一点增益，避免音量太小
+        const gainNode = this.context.createGain();
+        gainNode.gain.value = 1.5;
+        source.connect(gainNode);
+        gainNode.connect(this.context.destination);
         
-        // 如果没有正在播放，开始播放
-        if (!isPlayingAudio) {
-            playNextAudio();
-        }
-    } catch (error) {
-        console.error('处理音频数据失败:', error);
-    }
-}
-
-function playNextAudio() {
-    if (audioQueue.length === 0) {
-        isPlayingAudio = false;
-        return;
-    }
-    
-    isPlayingAudio = true;
-    const rawData = audioQueue.shift();
-    
-    try {
-        // 创建或恢复 AudioContext（使用 24kHz 采样率）
-        if (!playbackAudioContext || playbackAudioContext.state === 'closed') {
-            playbackAudioContext = new AudioContext({ sampleRate: 24000 });
-        }
+        // 计算播放时间，确保连续播放
+        const currentTime = this.context.currentTime;
+        const startTime = Math.max(currentTime, this.nextPlayTime);
         
-        // 如果 AudioContext 被暂停，恢复它
-        if (playbackAudioContext.state === 'suspended') {
-            playbackAudioContext.resume();
-        }
+        source.start(startTime);
+        this.nextPlayTime = startTime + audioBuffer.duration;
+        this.isPlaying = true;
         
-        // 字节跳动 TTS 返回的是 float32 格式的 PCM 数据（24kHz）
-        // 每个样本 4 字节
-        const numSamples = rawData.length / 4;
-        const buffer = playbackAudioContext.createBuffer(1, numSamples, 24000);
-        const channelData = buffer.getChannelData(0);
-        const view = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
-        
-        for (let i = 0; i < numSamples; i++) {
-            // 读取 float32 little-endian
-            channelData[i] = view.getFloat32(i * 4, true);
-        }
-        
-        const source = playbackAudioContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(playbackAudioContext.destination);
-        
-        // 播放完成后继续播放下一个
         source.onended = () => {
-            playNextAudio();
+            // 检查是否还有待播放的数据
+            if (this.buffer.length > 0) {
+                this.processBuffer();
+            } else if (this.context.currentTime >= this.nextPlayTime) {
+                this.isPlaying = false;
+            }
         };
         
-        source.start();
-        console.log('🔊 正在播放音频, 样本数:', numSamples, '时长:', (numSamples / 24000).toFixed(2), '秒');
-    } catch (error) {
-        console.error('播放音频失败:', error);
-        // 继续播放下一个
-        playNextAudio();
+        console.log('🔊 播放音频, 时长:', audioBuffer.duration.toFixed(2), '秒');
+    },
+    
+    // 清空缓冲
+    clear() {
+        this.buffer = [];
+        this.isPlaying = false;
+        this.nextPlayTime = 0;
     }
+};
+
+// 兼容旧接口
+function playAudio(audioData) {
+    audioPlayer.addData(audioData);
 }
 
 // ===== 初始化粒子动画 =====
