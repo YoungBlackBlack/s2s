@@ -373,9 +373,14 @@ async function startRecording() {
         updateStatus('正在连接...', 'connecting');
         
         // 获取鉴权信息
-        const auth = await fetch('/api/auth').then(r => r.json());
+        const response = await fetch('/api/auth');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `获取鉴权信息失败 (${response.status})`);
+        }
+        const auth = await response.json();
         if (!auth.appId || !auth.accessKey) {
-            throw new Error('鉴权信息获取失败');
+            throw new Error(auth.message || '鉴权信息获取失败：环境变量未配置');
         }
         
         // 创建WebSocket连接
