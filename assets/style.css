@@ -278,49 +278,56 @@ body {
     color: var(--text-primary);
 }
 
+/* 字幕容器 */
+.subtitle-container {
+    width: 100%;
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+}
+
 /* 字幕项 */
 .subtitle-item {
     background: var(--bg-glass);
-    backdrop-filter: saturate(180%) blur(30px);
-    padding: var(--spacing-md) var(--spacing-xl);
-    border-radius: var(--radius-lg);
+    backdrop-filter: saturate(180%) blur(20px);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
     border: 0.5px solid var(--border-glass);
-    box-shadow: var(--shadow-md);
-    max-width: 85%;
-    text-align: center;
-    opacity: 0;
-    transform: translateY(30px) scale(0.9);
-    animation: subtitleAppear 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
     word-wrap: break-word;
-    line-height: 1.4;
+    line-height: 1.5;
+    font-size: clamp(18px, 4vw, 28px);
+    font-weight: 500;
+    color: var(--text-primary);
+    animation: subtitleAppear 0.3s ease forwards;
+    transition: opacity 0.3s, background 0.3s;
 }
 
-.subtitle-item.active {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    background: rgba(0, 122, 255, 0.15);
+/* 当前正在显示的字幕 */
+.subtitle-item.current {
+    background: rgba(0, 122, 255, 0.2);
     border-color: rgba(0, 122, 255, 0.5);
+    font-size: clamp(22px, 5vw, 36px);
+    font-weight: 600;
+}
+
+/* 历史字幕 */
+.subtitle-item.history {
+    opacity: 0.5;
+    font-size: clamp(16px, 3vw, 22px);
 }
 
 @keyframes subtitleAppear {
     from {
         opacity: 0;
-        transform: translateY(30px) scale(0.9);
-        filter: blur(10px);
+        transform: translateY(10px);
     }
     to {
         opacity: 1;
-        transform: translateY(0) scale(1);
-        filter: blur(0);
+        transform: translateY(0);
     }
-}
-
-/* 字幕文本 */
-.subtitle-text {
-    font-size: clamp(28px, 5vw, 56px);
-    font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: -0.02em;
 }
 
 /* 打字机效果光标 */

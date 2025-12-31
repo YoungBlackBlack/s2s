@@ -19,127 +19,127 @@ let currentRoomId = null;
 let wsProxyUrl = null; // Railway WebSocket代理服务器URL
 
 // 字幕管理器（区分我的和对方的）
+// 简化版本：直接更新最新字幕，不使用打字机效果
 const mySubtitleManager = {
     container: null,
-    items: [],
-    maxItems: 5,
+    currentItem: null,
+    history: [],
+    maxHistory: 3,
     
     init(containerId) {
         this.container = document.getElementById(containerId);
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
     },
     
     addSubtitle(text) {
-        if (!this.container) return;
+        if (!this.container || !text) return;
         
-        // 创建新字幕项
-        const item = document.createElement('div');
-        item.className = 'subtitle-item active';
-        const textEl = document.createElement('div');
-        textEl.className = 'subtitle-text';
-        item.appendChild(textEl);
+        console.log('📝 显示字幕:', text);
         
-        // 添加到容器
-        this.container.appendChild(item);
-        this.items.push(item);
-        
-        // 打字机效果显示文字
-        this.typewriter(textEl, text);
-        
-        // 如果超过最大数量，移除最旧的
-        if (this.items.length > this.maxItems) {
-            const oldItem = this.items.shift();
-            oldItem.classList.add('fade-out');
-            setTimeout(() => oldItem.remove(), 500);
+        // 如果有当前字幕，移动到历史
+        if (this.currentItem && this.currentItem.textContent) {
+            this.currentItem.classList.remove('current');
+            this.currentItem.classList.add('history');
+            this.history.push(this.currentItem);
+            
+            // 限制历史数量
+            while (this.history.length > this.maxHistory) {
+                const old = this.history.shift();
+                old.remove();
+            }
         }
         
-        // 滚动效果：新字幕出现，旧字幕上移
-        this.items.forEach((el, index) => {
-            if (index < this.items.length - 1) {
-                el.style.transform = `translateY(-${(this.items.length - index - 1) * 20}px)`;
-                el.style.opacity = Math.max(0.3, 1 - (this.items.length - index - 1) * 0.2);
-            }
-        });
+        // 创建新的当前字幕
+        const item = document.createElement('div');
+        item.className = 'subtitle-item current';
+        item.textContent = text;
+        this.container.appendChild(item);
+        this.currentItem = item;
+        
+        // 滚动到底部
+        this.container.scrollTop = this.container.scrollHeight;
     },
     
-    typewriter(element, text, speed = 30) {
-        let index = 0;
-        element.textContent = '';
+    // 更新当前字幕（用于流式更新）
+    updateSubtitle(text) {
+        if (!this.container || !text) return;
         
-        const timer = setInterval(() => {
-            if (index < text.length) {
-                element.textContent += text[index];
-                index++;
-            } else {
-                clearInterval(timer);
-            }
-        }, speed);
+        if (!this.currentItem) {
+            this.addSubtitle(text);
+        } else {
+            this.currentItem.textContent = text;
+        }
     },
     
     clear() {
-        this.items.forEach(item => item.remove());
-        this.items = [];
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
+        this.currentItem = null;
+        this.history = [];
     }
 };
 
 const otherSubtitleManager = {
     container: null,
-    items: [],
-    maxItems: 5,
+    currentItem: null,
+    history: [],
+    maxHistory: 3,
     
     init(containerId) {
         this.container = document.getElementById(containerId);
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
     },
     
     addSubtitle(text) {
-        if (!this.container) return;
+        if (!this.container || !text) return;
         
-        // 创建新字幕项
-        const item = document.createElement('div');
-        item.className = 'subtitle-item active';
-        const textEl = document.createElement('div');
-        textEl.className = 'subtitle-text';
-        item.appendChild(textEl);
+        console.log('📝 对方字幕:', text);
         
-        // 添加到容器
-        this.container.appendChild(item);
-        this.items.push(item);
-        
-        // 打字机效果显示文字
-        this.typewriter(textEl, text);
-        
-        // 如果超过最大数量，移除最旧的
-        if (this.items.length > this.maxItems) {
-            const oldItem = this.items.shift();
-            oldItem.classList.add('fade-out');
-            setTimeout(() => oldItem.remove(), 500);
+        // 如果有当前字幕，移动到历史
+        if (this.currentItem && this.currentItem.textContent) {
+            this.currentItem.classList.remove('current');
+            this.currentItem.classList.add('history');
+            this.history.push(this.currentItem);
+            
+            // 限制历史数量
+            while (this.history.length > this.maxHistory) {
+                const old = this.history.shift();
+                old.remove();
+            }
         }
         
-        // 滚动效果：新字幕出现，旧字幕上移
-        this.items.forEach((el, index) => {
-            if (index < this.items.length - 1) {
-                el.style.transform = `translateY(-${(this.items.length - index - 1) * 20}px)`;
-                el.style.opacity = Math.max(0.3, 1 - (this.items.length - index - 1) * 0.2);
-            }
-        });
+        // 创建新的当前字幕
+        const item = document.createElement('div');
+        item.className = 'subtitle-item current';
+        item.textContent = text;
+        this.container.appendChild(item);
+        this.currentItem = item;
+        
+        // 滚动到底部
+        this.container.scrollTop = this.container.scrollHeight;
     },
     
-    typewriter(element, text, speed = 30) {
-        let index = 0;
-        element.textContent = '';
+    updateSubtitle(text) {
+        if (!this.container || !text) return;
         
-        const timer = setInterval(() => {
-            if (index < text.length) {
-                element.textContent += text[index];
-                index++;
-            } else {
-                clearInterval(timer);
-            }
-        }, speed);
+        if (!this.currentItem) {
+            this.addSubtitle(text);
+        } else {
+            this.currentItem.textContent = text;
+        }
     },
     
     clear() {
-        this.items.forEach(item => item.remove());
-        this.items = [];
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
+        this.currentItem = null;
+        this.history = [];
     }
 };
 
@@ -818,11 +818,12 @@ function convertToPCM(float32Array) {
 // 音频播放队列，确保按顺序播放
 const audioQueue = [];
 let isPlayingAudio = false;
+let playbackAudioContext = null;
 
 function playAudio(audioData) {
     try {
         // audioData 是 base64 编码的字符串，需要先解码
-        let pcmData;
+        let rawData;
         if (typeof audioData === 'string') {
             // Base64 解码
             const binaryString = atob(audioData);
@@ -830,18 +831,20 @@ function playAudio(audioData) {
             for (let i = 0; i < binaryString.length; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
-            pcmData = bytes.buffer;
+            rawData = bytes;
         } else if (audioData instanceof ArrayBuffer) {
-            pcmData = audioData;
+            rawData = new Uint8Array(audioData);
         } else if (audioData instanceof Uint8Array) {
-            pcmData = audioData.buffer;
+            rawData = audioData;
         } else {
             console.error('不支持的音频数据格式:', typeof audioData);
             return;
         }
         
+        console.log('🎵 收到音频数据, 字节数:', rawData.length);
+        
         // 添加到播放队列
-        audioQueue.push(pcmData);
+        audioQueue.push(rawData);
         
         // 如果没有正在播放，开始播放
         if (!isPlayingAudio) {
@@ -859,34 +862,34 @@ function playNextAudio() {
     }
     
     isPlayingAudio = true;
-    const pcmData = audioQueue.shift();
+    const rawData = audioQueue.shift();
     
     try {
-        // 创建或恢复 AudioContext
-        if (!audioContext || audioContext.state === 'closed') {
-            audioContext = new AudioContext({ sampleRate: 24000 });
+        // 创建或恢复 AudioContext（使用 24kHz 采样率）
+        if (!playbackAudioContext || playbackAudioContext.state === 'closed') {
+            playbackAudioContext = new AudioContext({ sampleRate: 24000 });
         }
         
         // 如果 AudioContext 被暂停，恢复它
-        if (audioContext.state === 'suspended') {
-            audioContext.resume();
+        if (playbackAudioContext.state === 'suspended') {
+            playbackAudioContext.resume();
         }
         
-        // 将PCM数据转换为AudioBuffer并播放
-        // 字节跳动返回的是 16-bit PCM 24kHz 格式
-        const numSamples = pcmData.byteLength / 2; // 16-bit = 2 bytes per sample
-        const buffer = audioContext.createBuffer(1, numSamples, 24000);
+        // 字节跳动 TTS 返回的是 float32 格式的 PCM 数据（24kHz）
+        // 每个样本 4 字节
+        const numSamples = rawData.length / 4;
+        const buffer = playbackAudioContext.createBuffer(1, numSamples, 24000);
         const channelData = buffer.getChannelData(0);
-        const view = new DataView(pcmData);
+        const view = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
         
         for (let i = 0; i < numSamples; i++) {
-            const int16 = view.getInt16(i * 2, true); // little-endian
-            channelData[i] = int16 / 32768.0;
+            // 读取 float32 little-endian
+            channelData[i] = view.getFloat32(i * 4, true);
         }
         
-        const source = audioContext.createBufferSource();
+        const source = playbackAudioContext.createBufferSource();
         source.buffer = buffer;
-        source.connect(audioContext.destination);
+        source.connect(playbackAudioContext.destination);
         
         // 播放完成后继续播放下一个
         source.onended = () => {
@@ -894,7 +897,7 @@ function playNextAudio() {
         };
         
         source.start();
-        console.log('🔊 正在播放音频, 样本数:', numSamples);
+        console.log('🔊 正在播放音频, 样本数:', numSamples, '时长:', (numSamples / 24000).toFixed(2), '秒');
     } catch (error) {
         console.error('播放音频失败:', error);
         // 继续播放下一个
