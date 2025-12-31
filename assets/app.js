@@ -697,51 +697,49 @@ function handleWebSocketMessage(data) {
         const message = parseProtobufMessage(data);
         if (!message) return;
         
+        // 事件类型可能是数字或字符串（取决于 Protobuf 解析方式）
         const eventType = message.event;
         console.log('📩 收到消息, event:', eventType, message);
         
-        switch (eventType) {
-            case 150: // SessionStarted
-                console.log('✅ 会话已开始');
-                updateStatus('会话已开始，请说话...', 'recording');
-                break;
-            
-            case 651: // SourceSubtitleResponse (原文字幕)
-                if (message.text) {
-                    console.log('🎤 原文:', message.text);
-                    // 可以选择显示原文
-                }
-                break;
-                
-            case 654: // TranslationSubtitleResponse (译文字幕)
-                if (message.text) {
-                    console.log('🌐 译文:', message.text);
-                    mySubtitleManager.addSubtitle(message.text);
-                }
-                break;
-                
-            case 352: // TTSResponse (语音合成结果)
-                if (mode === 's2s' && message.data) {
-                    console.log('🔊 收到语音数据');
-                    playAudio(message.data);
-                }
-                break;
-                
-            case 154: // UsageResponse
-                handleUsageResponse(message);
-                break;
-                
-            case 152: // SessionFinished
-                console.log('✅ 会话已结束');
-                break;
-                
-            case 153: // SessionFailed
-                console.error('❌ 会话失败:', message.responseMeta?.Message);
-                updateStatus('会话失败: ' + (message.responseMeta?.Message || '未知错误'), 'error');
-                break;
-            
-            default:
-                console.log('📨 未处理的事件类型:', eventType);
+        // 支持数字和字符串两种事件类型格式
+        const isEvent = (type, num, str) => eventType === num || eventType === str;
+        
+        if (isEvent(eventType, 150, 'SessionStarted')) {
+            console.log('✅ 会话已开始');
+            updateStatus('会话已开始，请说话...', 'recording');
+        }
+        else if (isEvent(eventType, 651, 'SourceSubtitleResponse')) {
+            // 原文字幕
+            if (message.text) {
+                console.log('🎤 原文:', message.text);
+            }
+        }
+        else if (isEvent(eventType, 654, 'TranslationSubtitleResponse')) {
+            // 译文字幕
+            if (message.text) {
+                console.log('🌐 译文:', message.text);
+                mySubtitleManager.addSubtitle(message.text);
+            }
+        }
+        else if (isEvent(eventType, 352, 'TTSResponse')) {
+            // 语音合成结果
+            if (message.data) {
+                console.log('🔊 收到语音数据, 长度:', message.data.length);
+                playAudio(message.data);
+            }
+        }
+        else if (isEvent(eventType, 154, 'UsageResponse') || isEvent(eventType, 154, 'ChargeData')) {
+            handleUsageResponse(message);
+        }
+        else if (isEvent(eventType, 152, 'SessionFinished')) {
+            console.log('✅ 会话已结束');
+        }
+        else if (isEvent(eventType, 153, 'SessionFailed')) {
+            console.error('❌ 会话失败:', message.responseMeta?.Message);
+            updateStatus('会话失败: ' + (message.responseMeta?.Message || '未知错误'), 'error');
+        }
+        else {
+            console.log('📨 其他事件:', eventType);
         }
     } catch (error) {
         console.error('处理消息失败:', error);
@@ -817,27 +815,91 @@ function convertToPCM(float32Array) {
 }
 
 // ===== 播放音频 =====
+// 音频播放队列，确保按顺序播放
+const audioQueue = [];
+let isPlayingAudio = false;
+
 function playAudio(audioData) {
-    if (!audioContext) {
-        audioContext = new AudioContext({ sampleRate: 24000 });
+    try {
+        // audioData 是 base64 编码的字符串，需要先解码
+        let pcmData;
+        if (typeof audioData === 'string') {
+            // Base64 解码
+            const binaryString = atob(audioData);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            pcmData = bytes.buffer;
+        } else if (audioData instanceof ArrayBuffer) {
+            pcmData = audioData;
+        } else if (audioData instanceof Uint8Array) {
+            pcmData = audioData.buffer;
+        } else {
+            console.error('不支持的音频数据格式:', typeof audioData);
+            return;
+        }
+        
+        // 添加到播放队列
+        audioQueue.push(pcmData);
+        
+        // 如果没有正在播放，开始播放
+        if (!isPlayingAudio) {
+            playNextAudio();
+        }
+    } catch (error) {
+        console.error('处理音频数据失败:', error);
+    }
+}
+
+function playNextAudio() {
+    if (audioQueue.length === 0) {
+        isPlayingAudio = false;
+        return;
     }
     
-    // 将PCM数据转换为AudioBuffer并播放
-    // 这里需要根据实际的音频格式来处理
-    // 假设是PCM 24kHz格式
-    const buffer = audioContext.createBuffer(1, audioData.length / 2, 24000);
-    const channelData = buffer.getChannelData(0);
-    const view = new DataView(audioData);
+    isPlayingAudio = true;
+    const pcmData = audioQueue.shift();
     
-    for (let i = 0; i < channelData.length; i++) {
-        const int16 = view.getInt16(i * 2, true);
-        channelData[i] = int16 / 32768.0;
+    try {
+        // 创建或恢复 AudioContext
+        if (!audioContext || audioContext.state === 'closed') {
+            audioContext = new AudioContext({ sampleRate: 24000 });
+        }
+        
+        // 如果 AudioContext 被暂停，恢复它
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+        
+        // 将PCM数据转换为AudioBuffer并播放
+        // 字节跳动返回的是 16-bit PCM 24kHz 格式
+        const numSamples = pcmData.byteLength / 2; // 16-bit = 2 bytes per sample
+        const buffer = audioContext.createBuffer(1, numSamples, 24000);
+        const channelData = buffer.getChannelData(0);
+        const view = new DataView(pcmData);
+        
+        for (let i = 0; i < numSamples; i++) {
+            const int16 = view.getInt16(i * 2, true); // little-endian
+            channelData[i] = int16 / 32768.0;
+        }
+        
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        
+        // 播放完成后继续播放下一个
+        source.onended = () => {
+            playNextAudio();
+        };
+        
+        source.start();
+        console.log('🔊 正在播放音频, 样本数:', numSamples);
+    } catch (error) {
+        console.error('播放音频失败:', error);
+        // 继续播放下一个
+        playNextAudio();
     }
-    
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContext.destination);
-    source.start();
 }
 
 // ===== 初始化粒子动画 =====
