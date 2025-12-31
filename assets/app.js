@@ -959,21 +959,50 @@ const audioPlayer = {
         }
         this.buffer = [];
         
-        // float32 格式：每样本 4 字节
-        const numSamples = Math.floor(merged.length / 4);
-        if (numSamples < 100) return; // 数据太少，跳过
-        
-        const audioBuffer = this.context.createBuffer(1, numSamples, this.sampleRate);
-        const channelData = audioBuffer.getChannelData(0);
-        
-        // 创建 DataView 直接从 merged 的 buffer 读取
+        // 自动检测格式：float32 或 int16
+        // 先尝试读取前几个样本来判断格式
         const dataView = new DataView(merged.buffer);
         
-        // 将 float32 little-endian 转换为音频数据
-        for (let i = 0; i < numSamples; i++) {
-            const sample = dataView.getFloat32(i * 4, true); // little-endian
-            // 限制在 -1.0 到 1.0 范围内
-            channelData[i] = Math.max(-1.0, Math.min(1.0, sample));
+        // 检测是否是 float32 格式
+        let isFloat32 = true;
+        const testSamples = Math.min(10, Math.floor(merged.length / 4));
+        for (let i = 0; i < testSamples; i++) {
+            const val = dataView.getFloat32(i * 4, true);
+            // float32 音频数据通常在 -1.5 到 1.5 范围内
+            if (isNaN(val) || !isFinite(val) || Math.abs(val) > 10) {
+                isFloat32 = false;
+                break;
+            }
+        }
+        
+        let numSamples, audioBuffer, channelData;
+        
+        if (isFloat32) {
+            // float32 格式：每样本 4 字节
+            numSamples = Math.floor(merged.length / 4);
+            if (numSamples < 100) return;
+            
+            audioBuffer = this.context.createBuffer(1, numSamples, this.sampleRate);
+            channelData = audioBuffer.getChannelData(0);
+            
+            for (let i = 0; i < numSamples; i++) {
+                const sample = dataView.getFloat32(i * 4, true);
+                channelData[i] = Math.max(-1.0, Math.min(1.0, sample));
+            }
+            console.log('🎵 音频格式: float32');
+        } else {
+            // int16 格式：每样本 2 字节
+            numSamples = Math.floor(merged.length / 2);
+            if (numSamples < 100) return;
+            
+            audioBuffer = this.context.createBuffer(1, numSamples, this.sampleRate);
+            channelData = audioBuffer.getChannelData(0);
+            
+            for (let i = 0; i < numSamples; i++) {
+                const int16 = dataView.getInt16(i * 2, true);
+                channelData[i] = int16 / 32768.0;
+            }
+            console.log('🎵 音频格式: int16');
         }
         
         // 创建音频源并播放
