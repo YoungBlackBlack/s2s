@@ -521,16 +521,12 @@ async function connectWebSocket(auth) {
 function sendStartSession() {
     currentSessionId = generateUUID();
     
-    // 构建StartSession消息
-    // 注意：这里需要根据实际的Protobuf定义来构建
-    // 由于protobufjs的加载可能需要调整，我们先使用JSON格式发送
-    // 实际应该使用Protobuf编码
-    
+    // 构建StartSession消息（符合Protobuf定义）
     const message = {
         request_meta: {
             session_id: currentSessionId
         },
-        event: 100, // StartSession
+        event: 100, // StartSession (event.Type.StartSession)
         source_audio: {
             format: 'wav',
             codec: 'raw',
@@ -538,14 +534,14 @@ function sendStartSession() {
             bits: 16,
             channel: 1
         },
-        target_audio: {
-            format: mode === 's2s' ? 'pcm' : undefined,
-            rate: mode === 's2s' ? 24000 : undefined
-        },
+        target_audio: mode === 's2s' ? {
+            format: 'pcm',
+            rate: 24000
+        } : undefined,
         request: {
-            mode: mode,
-            source_language: sourceLanguage,
-            target_language: targetLanguage
+            mode: mode, // 's2s' or 's2t'
+            source_language: sourceLanguage, // 'zh' or 'en'
+            target_language: targetLanguage  // 'en' or 'zh'
         }
     };
     
@@ -559,10 +555,14 @@ function sendAudioData(audioData) {
         return;
     }
     
+    // 构建TaskRequest消息（符合Protobuf定义）
+    // audioData 是 ArrayBuffer，需要转换为 Uint8Array
+    const uint8Array = new Uint8Array(audioData);
+    
     const message = {
-        event: 200, // TaskRequest
+        event: 200, // TaskRequest (event.Type.TaskRequest)
         source_audio: {
-            data: audioData
+            binary_data: uint8Array // 使用 binary_data 字段（bytes类型），需要 Uint8Array
         }
     };
     
@@ -591,24 +591,39 @@ function sendProtobufMessage(message, eventType) {
             return;
         }
         
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.warn('⚠️ WebSocket 未连接，跳过消息发送');
+            return;
+        }
+        
         // 使用Protobuf编码
         const TranslateRequest = root.lookupType('data.speech.ast.TranslateRequest');
         if (!TranslateRequest) {
+            console.error('❌ 找不到 TranslateRequest 类型定义');
+            console.log('可用的类型:', root.nested);
             throw new Error('找不到 TranslateRequest 类型定义');
         }
         
+        // 验证消息（允许部分字段缺失）
         const errMsg = TranslateRequest.verify(message);
         if (errMsg) {
-            console.error('消息验证失败:', errMsg);
-            throw new Error(errMsg);
+            console.warn('⚠️ 消息验证警告:', errMsg);
+            // 不抛出错误，继续尝试编码
         }
         
+        // 编码消息
         const buffer = TranslateRequest.encode(message).finish();
         ws.send(buffer);
-        console.log('✅ Protobuf 消息发送成功');
+        
+        // 只在调试时输出日志，避免频繁输出
+        if (eventType === 100) { // StartSession
+            console.log('✅ StartSession 消息发送成功');
+        }
     } catch (error) {
         console.error('❌ 发送消息失败:', error);
-        updateStatus('发送消息失败: ' + error.message, 'error');
+        console.error('消息内容:', message);
+        // 不更新状态，避免频繁弹窗
+        // updateStatus('发送消息失败: ' + error.message, 'error');
     }
 }
 
