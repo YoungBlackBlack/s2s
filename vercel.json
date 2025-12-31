@@ -12,8 +12,30 @@
       "dest": "/api/$1"
     },
     {
-      "src": "/(.*)",
+      "src": "/(.*\\.(html|css|js|json|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot))",
       "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/login.html"
+    },
+    {
+      "source": "/room",
+      "destination": "/room.html"
+    },
+    {
+      "source": "/stats",
+      "destination": "/stats.html"
     }
   ]
 }
