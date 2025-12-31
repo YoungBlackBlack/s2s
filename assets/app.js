@@ -19,12 +19,12 @@ let currentRoomId = null;
 let wsProxyUrl = null; // Railway WebSocket代理服务器URL
 
 // 字幕管理器（区分我的和对方的）
-// 简化版本：直接更新最新字幕，不使用打字机效果
+// KTV 歌词风格：居中显示，保留历史，当前高亮
 const mySubtitleManager = {
     container: null,
     currentItem: null,
     history: [],
-    maxHistory: 3,
+    maxHistory: 5, // 保留5条历史字幕
     
     init(containerId) {
         this.container = document.getElementById(containerId);
@@ -44,10 +44,12 @@ const mySubtitleManager = {
             this.currentItem.classList.add('history');
             this.history.push(this.currentItem);
             
-            // 限制历史数量
+            // 限制历史数量，移除最旧的
             while (this.history.length > this.maxHistory) {
                 const old = this.history.shift();
-                old.remove();
+                if (old && old.parentNode) {
+                    old.remove();
+                }
             }
         }
         
@@ -57,9 +59,6 @@ const mySubtitleManager = {
         item.textContent = text;
         this.container.appendChild(item);
         this.currentItem = item;
-        
-        // 滚动到底部
-        this.container.scrollTop = this.container.scrollHeight;
     },
     
     // 更新当前字幕（用于流式更新）
@@ -86,7 +85,7 @@ const otherSubtitleManager = {
     container: null,
     currentItem: null,
     history: [],
-    maxHistory: 3,
+    maxHistory: 5, // 保留5条历史字幕
     
     init(containerId) {
         this.container = document.getElementById(containerId);
@@ -106,10 +105,12 @@ const otherSubtitleManager = {
             this.currentItem.classList.add('history');
             this.history.push(this.currentItem);
             
-            // 限制历史数量
+            // 限制历史数量，移除最旧的
             while (this.history.length > this.maxHistory) {
                 const old = this.history.shift();
-                old.remove();
+                if (old && old.parentNode) {
+                    old.remove();
+                }
             }
         }
         
@@ -119,9 +120,6 @@ const otherSubtitleManager = {
         item.textContent = text;
         this.container.appendChild(item);
         this.currentItem = item;
-        
-        // 滚动到底部
-        this.container.scrollTop = this.container.scrollHeight;
     },
     
     updateSubtitle(text) {
