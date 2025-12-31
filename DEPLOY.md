@@ -75,7 +75,7 @@ https://your-app.railway.app/health
 
 **必需：**
 - `APP_ID` - 火山引擎APP ID
-- `ACCESS_KEY` - 火山引擎Access Key
+- `ACCESS_TOKEN` - 火山引擎Access Token（也可以使用ACCESS_KEY作为环境变量名）
 
 **可选：**
 - `TOKEN_PRICE_INPUT` - 80（默认值）

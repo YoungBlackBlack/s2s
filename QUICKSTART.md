@@ -81,7 +81,7 @@ git push
 3. 导入 GitHub 仓库 `YoungBlackBlack/s2s`
 4. 配置环境变量：
    - `APP_ID` - 你的 APP ID
-   - `ACCESS_KEY` - 你的 Access Key
+   - `ACCESS_TOKEN` - 你的 Access Token（也可以使用ACCESS_KEY作为环境变量名）
    - `TOKEN_PRICE_INPUT` - 80（可选）
    - `TOKEN_PRICE_OUTPUT_TEXT` - 80（可选）
    - `TOKEN_PRICE_OUTPUT_AUDIO` - 300（可选）

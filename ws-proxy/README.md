@@ -86,7 +86,7 @@ wss://your-app.railway.app?appId=YOUR_APP_ID&accessKey=YOUR_ACCESS_KEY&roomId=RO
 
 参数说明：
 - `appId` (必需) - 火山引擎APP ID
-- `accessKey` (必需) - 火山引擎Access Key
+- `accessKey` (必需) - 火山引擎Access Token（URL参数名保持accessKey）
 - `roomId` (可选) - 房间ID，用于多用户交流
 - `userId` (可选) - 用户ID，如果不提供会自动生成
 

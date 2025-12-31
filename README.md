@@ -32,7 +32,7 @@ npm install
 在 Vercel 控制台配置以下环境变量：
 
 - `APP_ID` - 火山引擎控制台获取的 APP ID
-- `ACCESS_KEY` - 火山引擎控制台获取的 Access Token
+- `ACCESS_TOKEN` - 火山引擎控制台获取的 Access Token（环境变量名，也可以使用ACCESS_KEY）
 - `TOKEN_PRICE_INPUT` - 输入音频token单价（元/百万Token，默认80）
 - `TOKEN_PRICE_OUTPUT_TEXT` - 输出文本token单价（元/百万Token，默认80）
 - `TOKEN_PRICE_OUTPUT_AUDIO` - 输出音频token单价（元/百万Token，默认300）

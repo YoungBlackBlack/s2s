@@ -9,13 +9,13 @@ export default async function handler(req, res) {
 
   // 从环境变量读取鉴权信息
   const appId = process.env.APP_ID;
-  const accessKey = process.env.ACCESS_KEY;
+  const accessToken = process.env.ACCESS_TOKEN || process.env.ACCESS_KEY; // 支持两种命名，ACCESS_TOKEN是正确名称
 
   // 检查环境变量是否配置
-  if (!appId || !accessKey) {
+  if (!appId || !accessToken) {
     return res.status(500).json({ 
       error: 'Authentication credentials not configured',
-      message: '请在 Vercel 控制台配置 APP_ID 和 ACCESS_KEY 环境变量'
+      message: '请在 Vercel 控制台配置 APP_ID 和 ACCESS_TOKEN 环境变量'
     });
   }
 
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   // 比如：IP白名单、访问频率限制等
   return res.status(200).json({
     appId: appId,
-    accessKey: accessKey,
+    accessKey: accessToken, // 前端使用accessKey字段名
     resourceId: 'volc.service_type.10053' // 固定值
   });
 }
