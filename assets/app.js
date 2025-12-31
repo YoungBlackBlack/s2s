@@ -890,14 +890,14 @@ function convertToPCM(float32Array) {
 }
 
 // ===== 流式音频播放器 =====
-// 使用缓冲合并来减少卡顿
+// 字节跳动 TTS 返回的是 16-bit PCM 24kHz 单声道
 const audioPlayer = {
     context: null,
     buffer: [],           // 原始音频数据缓冲
     isPlaying: false,
     nextPlayTime: 0,      // 下一个音频块应该播放的时间
     sampleRate: 24000,
-    bufferThreshold: 3,   // 累积3个块后开始播放，减少卡顿
+    minBufferSize: 4800,  // 最小缓冲：0.1秒的数据（24000 * 0.1 * 2 bytes）
     
     init() {
         if (!this.context || this.context.state === 'closed') {
@@ -930,8 +930,11 @@ const audioPlayer = {
             
             this.buffer.push(rawData);
             
-            // 如果缓冲达到阈值或者已经在播放，处理音频
-            if (this.buffer.length >= this.bufferThreshold || this.isPlaying) {
+            // 计算当前缓冲大小
+            const totalSize = this.buffer.reduce((sum, arr) => sum + arr.length, 0);
+            
+            // 如果缓冲足够大，或者已经在播放中，处理音频
+            if (totalSize >= this.minBufferSize || this.isPlaying) {
                 this.processBuffer();
             }
         } catch (error) {
@@ -955,45 +958,28 @@ const audioPlayer = {
         }
         this.buffer = [];
         
-        // 解码音频数据
-        // 尝试 float32 格式（每样本4字节）
-        const numSamples = Math.floor(merged.length / 4);
-        if (numSamples < 10) return; // 数据太少，跳过
+        // 16-bit PCM 格式：每样本 2 字节
+        const numSamples = Math.floor(merged.length / 2);
+        if (numSamples < 100) return; // 数据太少，跳过
         
         const audioBuffer = this.context.createBuffer(1, numSamples, this.sampleRate);
         const channelData = audioBuffer.getChannelData(0);
         const view = new DataView(merged.buffer, merged.byteOffset, merged.byteLength);
         
-        let hasValidData = false;
+        // 将 16-bit signed integer 转换为 -1.0 到 1.0 的浮点数
         for (let i = 0; i < numSamples; i++) {
-            const sample = view.getFloat32(i * 4, true);
-            // 检查是否是有效的 float32 数据
-            if (!isNaN(sample) && isFinite(sample) && Math.abs(sample) <= 1.5) {
-                channelData[i] = Math.max(-1, Math.min(1, sample));
-                if (Math.abs(sample) > 0.001) hasValidData = true;
-            } else {
-                channelData[i] = 0;
-            }
-        }
-        
-        if (!hasValidData) {
-            console.warn('⚠️ 音频数据可能格式不正确');
-            return;
+            const int16 = view.getInt16(i * 2, true); // little-endian
+            channelData[i] = int16 / 32768.0;
         }
         
         // 创建音频源并播放
         const source = this.context.createBufferSource();
         source.buffer = audioBuffer;
+        source.connect(this.context.destination);
         
-        // 添加一点增益，避免音量太小
-        const gainNode = this.context.createGain();
-        gainNode.gain.value = 1.5;
-        source.connect(gainNode);
-        gainNode.connect(this.context.destination);
-        
-        // 计算播放时间，确保连续播放
+        // 计算播放时间，确保连续播放无缝衔接
         const currentTime = this.context.currentTime;
-        const startTime = Math.max(currentTime, this.nextPlayTime);
+        const startTime = Math.max(currentTime + 0.01, this.nextPlayTime);
         
         source.start(startTime);
         this.nextPlayTime = startTime + audioBuffer.duration;
@@ -1003,12 +989,12 @@ const audioPlayer = {
             // 检查是否还有待播放的数据
             if (this.buffer.length > 0) {
                 this.processBuffer();
-            } else if (this.context.currentTime >= this.nextPlayTime) {
+            } else if (this.context.currentTime >= this.nextPlayTime - 0.05) {
                 this.isPlaying = false;
             }
         };
         
-        console.log('🔊 播放音频, 时长:', audioBuffer.duration.toFixed(2), '秒');
+        console.log('🔊 播放音频, 样本数:', numSamples, '时长:', audioBuffer.duration.toFixed(2), '秒');
     },
     
     // 清空缓冲
