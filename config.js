@@ -1,8 +1,8 @@
 // ===== 配置文件 =====
-// 部署时需要配置Railway WebSocket代理服务器URL
+// Render WebSocket代理服务器URL（已配置）
 
 // Render WebSocket代理服务器URL
-// 部署后，将 'wss://your-app.onrender.com' 替换为你的实际Render URL
+// 当前配置：wss://s2s-dxla.onrender.com
 window.WS_PROXY_URL = window.WS_PROXY_URL || 'wss://s2s-dxla.onrender.com';
 
 // 如果需要从环境变量读取（Vercel）
