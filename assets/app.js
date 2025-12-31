@@ -22,13 +22,125 @@ let wsProxyUrl = null; // Railway WebSocket代理服务器URL
 const mySubtitleManager = {
     container: null,
     items: [],
-    maxItems: 5
+    maxItems: 5,
+    
+    init(containerId) {
+        this.container = document.getElementById(containerId);
+    },
+    
+    addSubtitle(text) {
+        if (!this.container) return;
+        
+        // 创建新字幕项
+        const item = document.createElement('div');
+        item.className = 'subtitle-item active';
+        const textEl = document.createElement('div');
+        textEl.className = 'subtitle-text';
+        item.appendChild(textEl);
+        
+        // 添加到容器
+        this.container.appendChild(item);
+        this.items.push(item);
+        
+        // 打字机效果显示文字
+        this.typewriter(textEl, text);
+        
+        // 如果超过最大数量，移除最旧的
+        if (this.items.length > this.maxItems) {
+            const oldItem = this.items.shift();
+            oldItem.classList.add('fade-out');
+            setTimeout(() => oldItem.remove(), 500);
+        }
+        
+        // 滚动效果：新字幕出现，旧字幕上移
+        this.items.forEach((el, index) => {
+            if (index < this.items.length - 1) {
+                el.style.transform = `translateY(-${(this.items.length - index - 1) * 20}px)`;
+                el.style.opacity = Math.max(0.3, 1 - (this.items.length - index - 1) * 0.2);
+            }
+        });
+    },
+    
+    typewriter(element, text, speed = 30) {
+        let index = 0;
+        element.textContent = '';
+        
+        const timer = setInterval(() => {
+            if (index < text.length) {
+                element.textContent += text[index];
+                index++;
+            } else {
+                clearInterval(timer);
+            }
+        }, speed);
+    },
+    
+    clear() {
+        this.items.forEach(item => item.remove());
+        this.items = [];
+    }
 };
 
 const otherSubtitleManager = {
     container: null,
     items: [],
-    maxItems: 5
+    maxItems: 5,
+    
+    init(containerId) {
+        this.container = document.getElementById(containerId);
+    },
+    
+    addSubtitle(text) {
+        if (!this.container) return;
+        
+        // 创建新字幕项
+        const item = document.createElement('div');
+        item.className = 'subtitle-item active';
+        const textEl = document.createElement('div');
+        textEl.className = 'subtitle-text';
+        item.appendChild(textEl);
+        
+        // 添加到容器
+        this.container.appendChild(item);
+        this.items.push(item);
+        
+        // 打字机效果显示文字
+        this.typewriter(textEl, text);
+        
+        // 如果超过最大数量，移除最旧的
+        if (this.items.length > this.maxItems) {
+            const oldItem = this.items.shift();
+            oldItem.classList.add('fade-out');
+            setTimeout(() => oldItem.remove(), 500);
+        }
+        
+        // 滚动效果：新字幕出现，旧字幕上移
+        this.items.forEach((el, index) => {
+            if (index < this.items.length - 1) {
+                el.style.transform = `translateY(-${(this.items.length - index - 1) * 20}px)`;
+                el.style.opacity = Math.max(0.3, 1 - (this.items.length - index - 1) * 0.2);
+            }
+        });
+    },
+    
+    typewriter(element, text, speed = 30) {
+        let index = 0;
+        element.textContent = '';
+        
+        const timer = setInterval(() => {
+            if (index < text.length) {
+                element.textContent += text[index];
+                index++;
+            } else {
+                clearInterval(timer);
+            }
+        }, speed);
+    },
+    
+    clear() {
+        this.items.forEach(item => item.remove());
+        this.items = [];
+    }
 };
 
 // Token统计
