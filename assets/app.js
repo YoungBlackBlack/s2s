@@ -521,30 +521,31 @@ async function connectWebSocket(auth) {
 function sendStartSession() {
     currentSessionId = generateUUID();
     
-    // 构建StartSession消息（符合Protobuf定义）
+    // 构建StartSession消息（符合Protobuf定义，使用驼峰命名）
     const message = {
-        request_meta: {
-            session_id: currentSessionId
+        requestMeta: {
+            SessionID: currentSessionId
         },
         event: 100, // StartSession (event.Type.StartSession)
-        source_audio: {
+        sourceAudio: {
             format: 'wav',
             codec: 'raw',
             rate: 16000,
             bits: 16,
             channel: 1
         },
-        target_audio: mode === 's2s' ? {
+        targetAudio: mode === 's2s' ? {
             format: 'pcm',
             rate: 24000
         } : undefined,
         request: {
             mode: mode, // 's2s' or 's2t'
-            source_language: sourceLanguage, // 'zh' or 'en'
-            target_language: targetLanguage  // 'en' or 'zh'
+            sourceLanguage: sourceLanguage, // 'zh' or 'en'
+            targetLanguage: targetLanguage  // 'en' or 'zh'
         }
     };
     
+    console.log('📤 发送 StartSession:', message);
     // 发送消息（需要Protobuf编码）
     sendProtobufMessage(message, 100);
 }
@@ -555,14 +556,14 @@ function sendAudioData(audioData) {
         return;
     }
     
-    // 构建TaskRequest消息（符合Protobuf定义）
+    // 构建TaskRequest消息（符合Protobuf定义，使用驼峰命名）
     // audioData 是 ArrayBuffer，需要转换为 Uint8Array
     const uint8Array = new Uint8Array(audioData);
     
     const message = {
         event: 200, // TaskRequest (event.Type.TaskRequest)
-        source_audio: {
-            binary_data: uint8Array // 使用 binary_data 字段（bytes类型），需要 Uint8Array
+        sourceAudio: {
+            binaryData: uint8Array // 使用 binaryData 字段（bytes类型），需要 Uint8Array
         }
     };
     
@@ -667,23 +668,31 @@ function handleWebSocketMessage(data) {
         if (!message) return;
         
         const eventType = message.event;
+        console.log('📩 收到消息, event:', eventType, message);
         
         switch (eventType) {
             case 150: // SessionStarted
-                console.log('会话已开始');
+                console.log('✅ 会话已开始');
+                updateStatus('会话已开始，请说话...', 'recording');
+                break;
+            
+            case 651: // SourceSubtitleResponse (原文字幕)
+                if (message.text) {
+                    console.log('🎤 原文:', message.text);
+                    // 可以选择显示原文
+                }
                 break;
                 
-            case 654: // TranslationSubtitleResponse
+            case 654: // TranslationSubtitleResponse (译文字幕)
                 if (message.text) {
-                    // 判断是来自房间消息还是直接消息
-                    // 如果是直接消息，说明是我的翻译结果
-                    // 如果是通过房间消息转发的，会在handleRoomMessage中处理
+                    console.log('🌐 译文:', message.text);
                     mySubtitleManager.addSubtitle(message.text);
                 }
                 break;
                 
-            case 352: // TTSResponse
+            case 352: // TTSResponse (语音合成结果)
                 if (mode === 's2s' && message.data) {
+                    console.log('🔊 收到语音数据');
                     playAudio(message.data);
                 }
                 break;
@@ -693,13 +702,16 @@ function handleWebSocketMessage(data) {
                 break;
                 
             case 152: // SessionFinished
-                console.log('会话已结束');
+                console.log('✅ 会话已结束');
                 break;
                 
             case 153: // SessionFailed
-                console.error('会话失败:', message.response_meta?.message);
-                updateStatus('会话失败', 'error');
+                console.error('❌ 会话失败:', message.responseMeta?.Message);
+                updateStatus('会话失败: ' + (message.responseMeta?.Message || '未知错误'), 'error');
                 break;
+            
+            default:
+                console.log('📨 未处理的事件类型:', eventType);
         }
     } catch (error) {
         console.error('处理消息失败:', error);
@@ -708,10 +720,11 @@ function handleWebSocketMessage(data) {
 
 // ===== 处理用量响应 =====
 function handleUsageResponse(message) {
-    if (message.response_meta?.billing?.items) {
-        message.response_meta.billing.items.forEach(item => {
-            const unit = item.unit;
-            const quantity = item.quantity;
+    // 使用驼峰命名字段 (responseMeta, Billing, Items)
+    if (message.responseMeta?.Billing?.Items) {
+        message.responseMeta.Billing.Items.forEach(item => {
+            const unit = item.Unit;
+            const quantity = item.Quantity;
             
             if (unit === 'input_audio_tokens') {
                 tokenStats.current.input_audio_tokens += quantity;
