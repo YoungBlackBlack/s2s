@@ -14,7 +14,7 @@ const path = require('path');
 
 const protosDir = path.join(__dirname, '..', 'protos');
 const outputDir = path.join(__dirname, '..', 'assets', 'protos');
-const outputFile = path.join(outputDir, 'bundle.js');
+const outputFile = path.join(outputDir, 'bundle.json');
 
 // 创建输出目录
 if (!fs.existsSync(outputDir)) {
@@ -22,17 +22,19 @@ if (!fs.existsSync(outputDir)) {
 }
 
 try {
-    console.log('开始转换 Protobuf 文件...');
+    console.log('开始转换 Protobuf 文件为 JSON...');
     
-    // 使用 pbjs 将 proto 文件转换为 JSON 模块
-    // 需要先安装: npm install -g protobufjs-cli
-    const command = `pbjs -t json-module -w es6 -o ${outputFile} ${protosDir}/common/events.proto ${protosDir}/common/rpcmeta.proto ${protosDir}/products/understanding/base/au_base.proto ${protosDir}/products/understanding/ast/ast_service.proto`;
+    // 使用 npx pbjs 转换为 JSON 格式，这是最通用的格式
+    const command = `npx pbjs -t json -o "${outputFile}" "${protosDir}/common/events.proto" "${protosDir}/common/rpcmeta.proto" "${protosDir}/products/understanding/base/au_base.proto" "${protosDir}/products/understanding/ast/ast_service.proto"`;
     
+    console.log('执行命令:', command);
     execSync(command, { stdio: 'inherit' });
     
     console.log(`✅ Protobuf 文件已转换为: ${outputFile}`);
-    console.log('现在可以在 app.js 中导入使用:');
-    console.log("  import { root } from './protos/bundle.js';");
+    console.log('现在可以在 app.js 中使用 fetch 加载:');
+    console.log("  const response = await fetch('assets/protos/bundle.json');");
+    console.log("  const json = await response.json();");
+    console.log("  root = protobuf.Root.fromJSON(json);");
     
 } catch (error) {
     console.error('❌ 转换失败:', error.message);

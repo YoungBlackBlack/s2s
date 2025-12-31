@@ -183,24 +183,27 @@ async function init() {
 // ===== 加载Protobuf定义 =====
 async function loadProtobuf() {
     try {
-        // 方案1：将proto文件转换为JSON格式（推荐）
-        // 使用命令：pbjs -t json-module -w es6 protos/**/*.proto > protos/bundle.js
-        // 然后导入：import { root } from './protos/bundle.js';
-        
-        // 方案2：使用protobufjs的load方法（需要服务器支持）
-        root = await protobuf.load([
-            'protos/common/events.proto',
-            'protos/common/rpcmeta.proto',
-            'protos/products/understanding/base/au_base.proto',
-            'protos/products/understanding/ast/ast_service.proto'
-        ]);
-        
-        root.resolveAll();
-        console.log('Protobuf加载成功');
+        // 优先尝试加载预构建的 JSON 格式（性能更好，单次请求）
+        const response = await fetch('assets/protos/bundle.json');
+        if (response.ok) {
+            const json = await response.json();
+            root = protobuf.Root.fromJSON(json);
+            console.log('Protobuf (JSON) 加载成功');
+        } else {
+            // 如果 JSON 加载失败，回退到动态加载 .proto 文件
+            console.warn('无法加载 bundle.json，回退到动态加载 .proto 文件');
+            root = await protobuf.load([
+                'protos/common/events.proto',
+                'protos/common/rpcmeta.proto',
+                'protos/products/understanding/base/au_base.proto',
+                'protos/products/understanding/ast/ast_service.proto'
+            ]);
+            root.resolveAll();
+            console.log('Protobuf (.proto) 加载成功');
+        }
     } catch (error) {
-        console.error('Protobuf加载失败:', error);
+        console.error('Protobuf 加载失败:', error);
         console.log('使用简化的消息处理方式');
-        // 如果加载失败，使用简化的JSON方式（临时方案）
         root = null;
     }
 }
