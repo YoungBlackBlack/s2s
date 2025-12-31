@@ -278,79 +278,76 @@ body {
     color: var(--text-primary);
 }
 
-/* 字幕容器 - KTV 歌词风格 */
+/* 字幕容器 - ChatGPT 流式风格 */
 .subtitle-container {
     width: 100%;
-    max-width: 800px;
+    max-width: 90%;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding: var(--spacing-sm);
+    gap: 12px;
+    padding: var(--spacing-md);
     text-align: center;
 }
 
-/* 字幕项 - 居中显示 */
+/* 字幕项 - 流式显示 */
 .subtitle-item {
     width: 100%;
     text-align: center;
-    padding: 6px 16px;
+    padding: 8px 20px;
     word-wrap: break-word;
-    line-height: 1.6;
-    font-size: 16px;
+    line-height: 1.8;
+    font-size: 15px;
     font-weight: 400;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     transition: all 0.3s ease;
-    animation: subtitleFadeIn 0.4s ease forwards;
 }
 
-/* 当前正在显示的字幕 - 高亮 */
+/* 当前正在输入的字幕 */
 .subtitle-item.current {
-    font-size: 20px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 500;
     color: #ffffff;
-    text-shadow: 0 0 20px rgba(0, 122, 255, 0.8), 0 0 40px rgba(0, 122, 255, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 12px 24px;
+}
+
+/* 打字光标动画 */
+.typing-cursor {
+    color: rgba(0, 122, 255, 0.8);
+    animation: blink 1s infinite;
+    font-weight: 400;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.3; }
 }
 
 /* 历史字幕 - 逐渐淡化 */
 .subtitle-item.history {
-    opacity: 0.6;
-}
-
-.subtitle-item.history:nth-last-child(2) {
-    opacity: 0.5;
-    font-size: 15px;
-}
-
-.subtitle-item.history:nth-last-child(3) {
-    opacity: 0.35;
     font-size: 14px;
+    opacity: 0.5;
+    background: transparent;
+    padding: 6px 16px;
 }
 
-.subtitle-item.history:nth-last-child(4) {
-    opacity: 0.2;
+.subtitle-item.history:first-child {
+    opacity: 0.3;
     font-size: 13px;
-}
-
-@keyframes subtitleFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 /* 移动端适配 */
 @media (max-width: 768px) {
     .subtitle-item {
         font-size: 14px;
+        padding: 6px 12px;
     }
     .subtitle-item.current {
-        font-size: 18px;
+        font-size: 16px;
+        padding: 10px 16px;
     }
 }
 

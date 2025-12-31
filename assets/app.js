@@ -19,12 +19,15 @@ let currentRoomId = null;
 let wsProxyUrl = null; // Railway WebSocket代理服务器URL
 
 // 字幕管理器（区分我的和对方的）
-// KTV 歌词风格：居中显示，保留历史，当前高亮
+// 流式显示：像 ChatGPT 一样逐字出现，同一句在一行
 const mySubtitleManager = {
     container: null,
     currentItem: null,
+    currentText: '',
     history: [],
-    maxHistory: 5, // 保留5条历史字幕
+    maxHistory: 3,
+    lastUpdateTime: 0,
+    finishTimeout: null,
     
     init(containerId) {
         this.container = document.getElementById(containerId);
@@ -33,43 +36,79 @@ const mySubtitleManager = {
         }
     },
     
-    addSubtitle(text) {
+    // 流式追加文字（主要方法）
+    appendText(text) {
         if (!this.container || !text) return;
         
-        console.log('📝 显示字幕:', text);
+        const now = Date.now();
         
-        // 如果有当前字幕，移动到历史
-        if (this.currentItem && this.currentItem.textContent) {
-            this.currentItem.classList.remove('current');
-            this.currentItem.classList.add('history');
-            this.history.push(this.currentItem);
-            
-            // 限制历史数量，移除最旧的
-            while (this.history.length > this.maxHistory) {
-                const old = this.history.shift();
-                if (old && old.parentNode) {
-                    old.remove();
-                }
+        // 如果距离上次更新超过 2 秒，认为是新句子
+        if (now - this.lastUpdateTime > 2000 && this.currentText) {
+            this.finishCurrentSentence();
+        }
+        
+        this.lastUpdateTime = now;
+        
+        // 清除之前的完成定时器
+        if (this.finishTimeout) {
+            clearTimeout(this.finishTimeout);
+        }
+        
+        // 追加文字
+        this.currentText += text;
+        
+        // 创建或更新当前字幕元素
+        if (!this.currentItem) {
+            const item = document.createElement('div');
+            item.className = 'subtitle-item current';
+            this.container.appendChild(item);
+            this.currentItem = item;
+        }
+        
+        // 显示当前文字 + 加载指示器
+        this.currentItem.innerHTML = this.currentText + '<span class="typing-cursor">...</span>';
+        
+        // 设置自动完成定时器（1.5秒没有新文字就认为句子结束）
+        this.finishTimeout = setTimeout(() => {
+            this.finishCurrentSentence();
+        }, 1500);
+    },
+    
+    // 完成当前句子，移到历史
+    finishCurrentSentence() {
+        if (!this.currentItem || !this.currentText) return;
+        
+        // 移除加载指示器
+        this.currentItem.textContent = this.currentText;
+        this.currentItem.classList.remove('current');
+        this.currentItem.classList.add('history');
+        this.history.push(this.currentItem);
+        
+        // 限制历史数量
+        while (this.history.length > this.maxHistory) {
+            const old = this.history.shift();
+            if (old && old.parentNode) {
+                old.remove();
             }
         }
         
-        // 创建新的当前字幕
-        const item = document.createElement('div');
-        item.className = 'subtitle-item current';
-        item.textContent = text;
-        this.container.appendChild(item);
-        this.currentItem = item;
+        // 重置当前状态
+        this.currentItem = null;
+        this.currentText = '';
+        
+        if (this.finishTimeout) {
+            clearTimeout(this.finishTimeout);
+            this.finishTimeout = null;
+        }
     },
     
-    // 更新当前字幕（用于流式更新）
+    // 兼容旧接口
+    addSubtitle(text) {
+        this.appendText(text);
+    },
+    
     updateSubtitle(text) {
-        if (!this.container || !text) return;
-        
-        if (!this.currentItem) {
-            this.addSubtitle(text);
-        } else {
-            this.currentItem.textContent = text;
-        }
+        this.appendText(text);
     },
     
     clear() {
@@ -77,15 +116,23 @@ const mySubtitleManager = {
             this.container.innerHTML = '';
         }
         this.currentItem = null;
+        this.currentText = '';
         this.history = [];
+        if (this.finishTimeout) {
+            clearTimeout(this.finishTimeout);
+            this.finishTimeout = null;
+        }
     }
 };
 
 const otherSubtitleManager = {
     container: null,
     currentItem: null,
+    currentText: '',
     history: [],
-    maxHistory: 5, // 保留5条历史字幕
+    maxHistory: 3,
+    lastUpdateTime: 0,
+    finishTimeout: null,
     
     init(containerId) {
         this.container = document.getElementById(containerId);
@@ -94,42 +141,67 @@ const otherSubtitleManager = {
         }
     },
     
-    addSubtitle(text) {
+    appendText(text) {
         if (!this.container || !text) return;
         
-        console.log('📝 对方字幕:', text);
+        const now = Date.now();
         
-        // 如果有当前字幕，移动到历史
-        if (this.currentItem && this.currentItem.textContent) {
-            this.currentItem.classList.remove('current');
-            this.currentItem.classList.add('history');
-            this.history.push(this.currentItem);
-            
-            // 限制历史数量，移除最旧的
-            while (this.history.length > this.maxHistory) {
-                const old = this.history.shift();
-                if (old && old.parentNode) {
-                    old.remove();
-                }
+        if (now - this.lastUpdateTime > 2000 && this.currentText) {
+            this.finishCurrentSentence();
+        }
+        
+        this.lastUpdateTime = now;
+        
+        if (this.finishTimeout) {
+            clearTimeout(this.finishTimeout);
+        }
+        
+        this.currentText += text;
+        
+        if (!this.currentItem) {
+            const item = document.createElement('div');
+            item.className = 'subtitle-item current';
+            this.container.appendChild(item);
+            this.currentItem = item;
+        }
+        
+        this.currentItem.innerHTML = this.currentText + '<span class="typing-cursor">...</span>';
+        
+        this.finishTimeout = setTimeout(() => {
+            this.finishCurrentSentence();
+        }, 1500);
+    },
+    
+    finishCurrentSentence() {
+        if (!this.currentItem || !this.currentText) return;
+        
+        this.currentItem.textContent = this.currentText;
+        this.currentItem.classList.remove('current');
+        this.currentItem.classList.add('history');
+        this.history.push(this.currentItem);
+        
+        while (this.history.length > this.maxHistory) {
+            const old = this.history.shift();
+            if (old && old.parentNode) {
+                old.remove();
             }
         }
         
-        // 创建新的当前字幕
-        const item = document.createElement('div');
-        item.className = 'subtitle-item current';
-        item.textContent = text;
-        this.container.appendChild(item);
-        this.currentItem = item;
+        this.currentItem = null;
+        this.currentText = '';
+        
+        if (this.finishTimeout) {
+            clearTimeout(this.finishTimeout);
+            this.finishTimeout = null;
+        }
+    },
+    
+    addSubtitle(text) {
+        this.appendText(text);
     },
     
     updateSubtitle(text) {
-        if (!this.container || !text) return;
-        
-        if (!this.currentItem) {
-            this.addSubtitle(text);
-        } else {
-            this.currentItem.textContent = text;
-        }
+        this.appendText(text);
     },
     
     clear() {
@@ -137,7 +209,12 @@ const otherSubtitleManager = {
             this.container.innerHTML = '';
         }
         this.currentItem = null;
+        this.currentText = '';
         this.history = [];
+        if (this.finishTimeout) {
+            clearTimeout(this.finishTimeout);
+            this.finishTimeout = null;
+        }
     }
 };
 
