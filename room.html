@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>房间 - 同声传译</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <style>
+        .room-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-md);
+        }
+        
+        .room-card {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            padding: var(--spacing-xl);
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        .room-title {
+            font-size: 28px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .user-info {
+            text-align: center;
+            margin-bottom: var(--spacing-lg);
+            padding: var(--spacing-sm);
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-sm);
+        }
+        
+        .user-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        
+        .room-actions {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+        
+        .action-section {
+            padding: var(--spacing-md);
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .action-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+            color: var(--text-secondary);
+        }
+        
+        .room-input-group {
+            display: flex;
+            gap: var(--spacing-xs);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .room-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 16px;
+            text-align: center;
+            letter-spacing: 2px;
+            font-weight: 600;
+        }
+        
+        .room-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .room-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .room-btn:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
+        }
+        
+        .room-btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .room-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .room-id-display {
+            text-align: center;
+            padding: var(--spacing-md);
+            background: rgba(0, 122, 255, 0.2);
+            border: 2px solid var(--primary-color);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .room-id-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .room-id-value {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: var(--primary-color);
+        }
+        
+        .logout-btn {
+            margin-top: var(--spacing-md);
+            padding: 10px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-secondary);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .logout-btn:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    <canvas id="particles-canvas"></canvas>
+    
+    <div class="room-container">
+        <div class="room-card">
+            <h1 class="room-title">选择房间</h1>
+            
+            <div class="user-info">
+                <div class="user-name" id="userName"></div>
+            </div>
+            
+            <div class="room-actions">
+                <!-- 创建房间 -->
+                <div class="action-section">
+                    <div class="action-title">创建新房间</div>
+                    <button class="room-btn" id="createRoomBtn">创建房间</button>
+                </div>
+                
+                <!-- 加入房间 -->
+                <div class="action-section">
+                    <div class="action-title">加入房间</div>
+                    <div class="room-input-group">
+                        <input 
+                            type="text" 
+                            id="roomIdInput" 
+                            class="room-input" 
+                            placeholder="输入房间号"
+                            maxlength="6"
+                            pattern="[A-Z0-9]{6}"
+                        >
+                    </div>
+                    <button class="room-btn secondary" id="joinRoomBtn">加入房间</button>
+                </div>
+            </div>
+            
+            <div id="roomIdDisplay" class="room-id-display" style="display: none;">
+                <div class="room-id-label">房间号</div>
+                <div class="room-id-value" id="roomIdValue"></div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: var(--spacing-xs);">
+                    分享此房间号给其他人
+                </div>
+            </div>
+            
+            <button class="logout-btn" id="logoutBtn">退出登录</button>
+        </div>
+    </div>
+    
+    <script src="assets/room.js"></script>
+</body>
+</html>
+

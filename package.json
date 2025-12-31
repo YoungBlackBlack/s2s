@@ -1,0 +1,26 @@
+{
+  "name": "s2s-translation-demo",
+  "version": "1.0.0",
+  "description": "同声传译演示应用 - 实时语音翻译",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "node scripts/build-protos.js",
+    "build-protos": "node scripts/build-protos.js"
+  },
+  "keywords": [
+    "translation",
+    "speech-to-speech",
+    "real-time"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "protobufjs": "^7.2.5"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.0.0",
+    "protobufjs-cli": "^1.1.3"
+  }
+}
+

@@ -1,0 +1,23 @@
+{
+  "name": "s2s-ws-proxy",
+  "version": "1.0.0",
+  "description": "WebSocket代理服务器 - 用于同声传译demo，解决浏览器WebSocket无法设置自定义Headers的问题",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "websocket",
+    "proxy",
+    "translation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

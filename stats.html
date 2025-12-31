@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Token统计 - 同声传译Demo">
+    <title>Token统计</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <style>
+        .stats-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+        }
+        
+        .stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .back-btn {
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .stat-card {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .stat-card h3 {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-sm);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .stat-unit {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        .stat-cost {
+            font-size: 18px;
+            color: var(--primary-color);
+            margin-top: var(--spacing-xs);
+        }
+        
+        .stats-table {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: var(--shadow-md);
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: var(--spacing-sm);
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+        
+        td {
+            color: var(--text-primary);
+        }
+        
+        .total-row {
+            font-weight: 700;
+            background: rgba(0, 122, 255, 0.1);
+        }
+        
+        .export-btn {
+            margin-top: var(--spacing-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .export-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    <div class="container">
+        <div class="stats-container">
+            <div class="stats-header">
+                <h1 style="font-size: 32px; font-weight: 700;">Token统计</h1>
+                <button class="back-btn" onclick="window.location.href='index.html'">返回主页</button>
+            </div>
+            
+            <div class="stats-grid" id="statsGrid">
+                <!-- 统计卡片会动态生成 -->
+            </div>
+            
+            <div class="stats-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Token类型</th>
+                            <th>当前会话</th>
+                            <th>累计总计</th>
+                            <th>单价（元/百万）</th>
+                            <th>当前费用（元）</th>
+                            <th>累计费用（元）</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody">
+                        <!-- 表格数据会动态生成 -->
+                    </tbody>
+                </table>
+                
+                <button class="export-btn" onclick="exportStats()">导出数据</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="assets/stats.js"></script>
+</body>
+</html>
+

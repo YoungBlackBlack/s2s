@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="同声传译演示 - 实时语音翻译">
+    <title>同声传译 Demo</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <!-- 粒子动画背景 -->
+    <canvas id="particles-canvas"></canvas>
+    
+    <!-- 渐变背景层 -->
+    <div class="gradient-bg"></div>
+    
+    <!-- 主容器 -->
+    <div class="container">
+        <!-- 顶部控制栏 -->
+        <header class="header">
+            <div class="controls">
+                <!-- 用户信息 -->
+                <div class="user-info-header" id="userInfoHeader">
+                    <span id="userNameHeader"></span>
+                </div>
+                
+                <!-- 语言选择 -->
+                <div class="language-selector">
+                    <button class="lang-btn active" data-lang="zh" data-target="en">中文 → 英文</button>
+                    <button class="lang-btn" data-lang="en" data-target="zh">英文 → 中文</button>
+                </div>
+                
+                <!-- 模式选择 -->
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="s2s">语音+语音</button>
+                    <button class="mode-btn" data-mode="s2t">语音+文字</button>
+                </div>
+                
+                <!-- 统计入口 -->
+                <button class="stats-btn" id="statsBtn" title="查看统计">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3v18h18"></path>
+                        <path d="M7 16l4-4 4 4 6-6"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+        
+        <!-- 字幕显示区域 -->
+        <main class="subtitle-area" id="subtitleArea">
+            <!-- 我的翻译 -->
+            <div class="subtitle-section">
+                <div class="section-label">我的翻译</div>
+                <div class="subtitle-container" id="mySubtitles">
+                    <!-- 我的字幕会动态添加到这里 -->
+                </div>
+            </div>
+            
+            <!-- 对方的翻译 -->
+            <div class="subtitle-section">
+                <div class="section-label">对方的翻译</div>
+                <div class="subtitle-container" id="otherSubtitles">
+                    <!-- 对方的字幕会动态添加到这里 -->
+                </div>
+            </div>
+            
+            <!-- 房间信息 -->
+            <div class="room-info" id="roomInfo">
+                <span class="room-id-label">房间:</span>
+                <span class="room-id-value" id="roomIdDisplay"></span>
+                <span class="room-status" id="roomStatus">等待中...</span>
+            </div>
+        </main>
+        
+        <!-- 底部控制区 -->
+        <footer class="footer">
+            <!-- 状态指示器 -->
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span class="status-text" id="statusText">准备就绪</span>
+            </div>
+            
+            <!-- 音频波形可视化 -->
+            <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+            
+            <!-- 开始/停止按钮 -->
+            <button class="record-btn" id="recordBtn">
+                <span class="btn-icon">🎤</span>
+                <span class="btn-text">开始</span>
+            </button>
+        </footer>
+    </div>
+    
+    <!-- 加载配置文件 -->
+    <script src="config.js"></script>
+    <!-- 加载 Protobuf 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.5/dist/protobuf.min.js"></script>
+    <script src="assets/app.js"></script>
+</body>
+</html>
+
