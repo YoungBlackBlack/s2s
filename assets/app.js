@@ -890,14 +890,14 @@ function convertToPCM(float32Array) {
 }
 
 // ===== 流式音频播放器 =====
-// 字节跳动 TTS 返回的是 16-bit PCM 24kHz 单声道
+// 字节跳动 TTS 返回的是 float32 PCM 24kHz 单声道
 const audioPlayer = {
     context: null,
     buffer: [],           // 原始音频数据缓冲
     isPlaying: false,
     nextPlayTime: 0,      // 下一个音频块应该播放的时间
     sampleRate: 24000,
-    minBufferSize: 4800,  // 最小缓冲：0.1秒的数据（24000 * 0.1 * 2 bytes）
+    minBufferSize: 9600,  // 最小缓冲：0.1秒的数据（24000 * 0.1 * 4 bytes for float32）
     
     init() {
         if (!this.context || this.context.state === 'closed') {
@@ -928,6 +928,7 @@ const audioPlayer = {
                 return;
             }
             
+            console.log('🎵 收到音频块, 字节数:', rawData.length);
             this.buffer.push(rawData);
             
             // 计算当前缓冲大小
@@ -958,18 +959,21 @@ const audioPlayer = {
         }
         this.buffer = [];
         
-        // 16-bit PCM 格式：每样本 2 字节
-        const numSamples = Math.floor(merged.length / 2);
+        // float32 格式：每样本 4 字节
+        const numSamples = Math.floor(merged.length / 4);
         if (numSamples < 100) return; // 数据太少，跳过
         
         const audioBuffer = this.context.createBuffer(1, numSamples, this.sampleRate);
         const channelData = audioBuffer.getChannelData(0);
-        const view = new DataView(merged.buffer, merged.byteOffset, merged.byteLength);
         
-        // 将 16-bit signed integer 转换为 -1.0 到 1.0 的浮点数
+        // 创建 DataView 直接从 merged 的 buffer 读取
+        const dataView = new DataView(merged.buffer);
+        
+        // 将 float32 little-endian 转换为音频数据
         for (let i = 0; i < numSamples; i++) {
-            const int16 = view.getInt16(i * 2, true); // little-endian
-            channelData[i] = int16 / 32768.0;
+            const sample = dataView.getFloat32(i * 4, true); // little-endian
+            // 限制在 -1.0 到 1.0 范围内
+            channelData[i] = Math.max(-1.0, Math.min(1.0, sample));
         }
         
         // 创建音频源并播放
@@ -979,7 +983,7 @@ const audioPlayer = {
         
         // 计算播放时间，确保连续播放无缝衔接
         const currentTime = this.context.currentTime;
-        const startTime = Math.max(currentTime + 0.01, this.nextPlayTime);
+        const startTime = Math.max(currentTime + 0.02, this.nextPlayTime);
         
         source.start(startTime);
         this.nextPlayTime = startTime + audioBuffer.duration;
