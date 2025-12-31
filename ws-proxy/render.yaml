@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: s2s-ws-proxy
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    rootDir: ./
+    envVars:
+      - key: NODE_ENV
+        value: production
+
