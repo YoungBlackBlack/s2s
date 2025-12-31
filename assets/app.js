@@ -475,22 +475,52 @@ async function connectWebSocket(auth) {
         
         ws.binaryType = 'arraybuffer';
         
+        let isResolved = false;
+        
         ws.onopen = () => {
             console.log('WebSocket连接成功（通过Railway代理）');
-            updateStatus('已连接', 'connected');
-            updateRoomStatus('已连接', true);
-            
-            // 发送建连请求
-            sendStartSession();
-            resolve();
+            updateStatus('等待翻译服务连接...', 'connecting');
+            // 注意：不要在这里发送 StartSession，等待代理服务器确认连接到字节跳动API后再发送
         };
         
         ws.onmessage = (event) => {
             // 检查是否是JSON消息（来自代理服务器的房间消息）
             try {
-                const text = event.data.toString();
+                // 对于 ArrayBuffer，需要先转换为字符串
+                let text;
+                if (event.data instanceof ArrayBuffer) {
+                    text = new TextDecoder().decode(event.data);
+                } else {
+                    text = event.data.toString();
+                }
+                
                 if (text.startsWith('{')) {
                     const message = JSON.parse(text);
+                    
+                    // 处理 'connected' 消息 - 代理服务器已连接到字节跳动API
+                    if (message.type === 'connected' && !isResolved) {
+                        console.log('✅ 代理服务器已连接到字节跳动API');
+                        updateStatus('已连接', 'connected');
+                        updateRoomStatus('已连接', true);
+                        
+                        // 现在才发送 StartSession
+                        sendStartSession();
+                        isResolved = true;
+                        resolve();
+                        return;
+                    }
+                    
+                    // 处理错误消息
+                    if (message.type === 'error') {
+                        console.error('❌ 代理服务器错误:', message.message);
+                        updateStatus('连接错误: ' + message.message, 'error');
+                        if (!isResolved) {
+                            isResolved = true;
+                            reject(new Error(message.message));
+                        }
+                        return;
+                    }
+                    
                     handleRoomMessage(message);
                     return;
                 }
@@ -985,7 +1015,7 @@ function generateUUID() {
 function handleRoomMessage(message) {
     switch (message.type) {
         case 'connected':
-            console.log('代理服务器连接成功');
+            // 已在 connectWebSocket 中处理
             break;
             
         case 'user_joined':
