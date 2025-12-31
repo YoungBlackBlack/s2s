@@ -797,10 +797,11 @@ function handleWebSocketMessage(data) {
             }
         }
         else if (isEvent(eventType, 352, 'TTSResponse')) {
-            // 语音合成结果
+            // 语音合成结果（自己的翻译语音）
+            // 同传场景：不播放自己的语音，避免回音
+            // 只有对方的语音才会播放（通过房间广播接收）
             if (message.data) {
-                console.log('🔊 收到语音数据, 长度:', message.data.length);
-                playAudio(message.data);
+                console.log('🎤 收到自己的语音数据（不播放，避免回音）');
             }
         }
         else if (isEvent(eventType, 154, 'UsageResponse') || isEvent(eventType, 154, 'ChargeData')) {
@@ -889,22 +890,38 @@ function convertToPCM(float32Array) {
     return int16Array.buffer;
 }
 
-// ===== 流式音频播放器 =====
-// 字节跳动 TTS 返回的是 float32 PCM 24kHz 单声道
+// ===== 流式音频播放器（优化版）=====
+// 特点：预缓冲、平滑播放、淡入淡出、自动格式检测
 const audioPlayer = {
     context: null,
+    gainNode: null,       // 音量控制
     buffer: [],           // 原始音频数据缓冲
     isPlaying: false,
     nextPlayTime: 0,      // 下一个音频块应该播放的时间
     sampleRate: 24000,
-    minBufferSize: 9600,  // 最小缓冲：0.1秒的数据（24000 * 0.1 * 4 bytes for float32）
+    volume: 1.0,          // 音量 0-1
+    preBufferCount: 2,    // 预缓冲块数量（等待N个块后才开始播放）
+    fadeInSamples: 480,   // 淡入采样数（20ms）
+    fadeOutSamples: 480,  // 淡出采样数（20ms）
     
     init() {
         if (!this.context || this.context.state === 'closed') {
             this.context = new AudioContext({ sampleRate: this.sampleRate });
+            // 创建增益节点用于音量控制
+            this.gainNode = this.context.createGain();
+            this.gainNode.gain.value = this.volume;
+            this.gainNode.connect(this.context.destination);
         }
         if (this.context.state === 'suspended') {
             this.context.resume();
+        }
+    },
+    
+    // 设置音量
+    setVolume(vol) {
+        this.volume = Math.max(0, Math.min(1, vol));
+        if (this.gainNode) {
+            this.gainNode.gain.value = this.volume;
         }
     },
     
@@ -928,19 +945,28 @@ const audioPlayer = {
                 return;
             }
             
-            console.log('🎵 收到音频块, 字节数:', rawData.length);
             this.buffer.push(rawData);
             
-            // 计算当前缓冲大小
-            const totalSize = this.buffer.reduce((sum, arr) => sum + arr.length, 0);
-            
-            // 如果缓冲足够大，或者已经在播放中，处理音频
-            if (totalSize >= this.minBufferSize || this.isPlaying) {
+            // 预缓冲策略：等待足够的数据块后才开始播放
+            if (!this.isPlaying && this.buffer.length >= this.preBufferCount) {
+                this.startPlayback();
+            } else if (this.isPlaying) {
+                // 已经在播放中，继续处理缓冲
                 this.processBuffer();
             }
         } catch (error) {
             console.error('添加音频数据失败:', error);
         }
+    },
+    
+    // 开始播放（从预缓冲状态开始）
+    startPlayback() {
+        if (this.buffer.length === 0) return;
+        this.init();
+        this.isPlaying = true;
+        this.nextPlayTime = this.context.currentTime + 0.05; // 50ms 延迟开始
+        console.log('🔊 开始播放语音...');
+        this.processBuffer();
     },
     
     // 处理缓冲区，合并并播放
@@ -960,7 +986,6 @@ const audioPlayer = {
         this.buffer = [];
         
         // 自动检测格式：float32 或 int16
-        // 先尝试读取前几个样本来判断格式
         const dataView = new DataView(merged.buffer);
         
         // 检测是否是 float32 格式
@@ -968,7 +993,6 @@ const audioPlayer = {
         const testSamples = Math.min(10, Math.floor(merged.length / 4));
         for (let i = 0; i < testSamples; i++) {
             const val = dataView.getFloat32(i * 4, true);
-            // float32 音频数据通常在 -1.5 到 1.5 范围内
             if (isNaN(val) || !isFinite(val) || Math.abs(val) > 10) {
                 isFloat32 = false;
                 break;
@@ -978,7 +1002,6 @@ const audioPlayer = {
         let numSamples, audioBuffer, channelData;
         
         if (isFloat32) {
-            // float32 格式：每样本 4 字节
             numSamples = Math.floor(merged.length / 4);
             if (numSamples < 100) return;
             
@@ -986,12 +1009,21 @@ const audioPlayer = {
             channelData = audioBuffer.getChannelData(0);
             
             for (let i = 0; i < numSamples; i++) {
-                const sample = dataView.getFloat32(i * 4, true);
-                channelData[i] = Math.max(-1.0, Math.min(1.0, sample));
+                let sample = dataView.getFloat32(i * 4, true);
+                sample = Math.max(-1.0, Math.min(1.0, sample));
+                
+                // 淡入效果（前20ms）
+                if (i < this.fadeInSamples) {
+                    sample *= i / this.fadeInSamples;
+                }
+                // 淡出效果（后20ms）
+                if (i > numSamples - this.fadeOutSamples) {
+                    sample *= (numSamples - i) / this.fadeOutSamples;
+                }
+                
+                channelData[i] = sample;
             }
-            console.log('🎵 音频格式: float32');
         } else {
-            // int16 格式：每样本 2 字节
             numSamples = Math.floor(merged.length / 2);
             if (numSamples < 100) return;
             
@@ -999,38 +1031,51 @@ const audioPlayer = {
             channelData = audioBuffer.getChannelData(0);
             
             for (let i = 0; i < numSamples; i++) {
-                const int16 = dataView.getInt16(i * 2, true);
-                channelData[i] = int16 / 32768.0;
+                let sample = dataView.getInt16(i * 2, true) / 32768.0;
+                
+                // 淡入效果
+                if (i < this.fadeInSamples) {
+                    sample *= i / this.fadeInSamples;
+                }
+                // 淡出效果
+                if (i > numSamples - this.fadeOutSamples) {
+                    sample *= (numSamples - i) / this.fadeOutSamples;
+                }
+                
+                channelData[i] = sample;
             }
-            console.log('🎵 音频格式: int16');
         }
         
         // 创建音频源并播放
         const source = this.context.createBufferSource();
         source.buffer = audioBuffer;
-        source.connect(this.context.destination);
+        source.connect(this.gainNode);
         
-        // 计算播放时间，确保连续播放无缝衔接
+        // 计算播放时间，确保连续播放
         const currentTime = this.context.currentTime;
-        const startTime = Math.max(currentTime + 0.02, this.nextPlayTime);
+        const startTime = Math.max(currentTime, this.nextPlayTime);
         
         source.start(startTime);
-        this.nextPlayTime = startTime + audioBuffer.duration;
-        this.isPlaying = true;
+        this.nextPlayTime = startTime + audioBuffer.duration - 0.02; // 略微重叠，平滑衔接
         
         source.onended = () => {
-            // 检查是否还有待播放的数据
             if (this.buffer.length > 0) {
                 this.processBuffer();
-            } else if (this.context.currentTime >= this.nextPlayTime - 0.05) {
-                this.isPlaying = false;
+            } else {
+                // 等待一小段时间，如果没有新数据就结束
+                setTimeout(() => {
+                    if (this.buffer.length === 0) {
+                        this.isPlaying = false;
+                        console.log('🔇 语音播放结束');
+                    }
+                }, 200);
             }
         };
         
-        console.log('🔊 播放音频, 样本数:', numSamples, '时长:', audioBuffer.duration.toFixed(2), '秒');
+        console.log('🔊 播放音频片段, 时长:', audioBuffer.duration.toFixed(2), '秒');
     },
     
-    // 清空缓冲
+    // 清空缓冲并停止播放
     clear() {
         this.buffer = [];
         this.isPlaying = false;
