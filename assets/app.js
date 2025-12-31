@@ -790,10 +790,10 @@ function handleWebSocketMessage(data) {
             }
         }
         else if (isEvent(eventType, 654, 'TranslationSubtitleResponse')) {
-            // 译文字幕
+            // 译文字幕（我的翻译）
             if (message.text) {
-                console.log('🌐 译文:', message.text);
-                mySubtitleManager.addSubtitle(message.text);
+                console.log('🌐 我的译文:', message.text);
+                mySubtitleManager.appendText(message.text);
             }
         }
         else if (isEvent(eventType, 352, 'TTSResponse')) {
@@ -1171,14 +1171,49 @@ function handleRoomMessage(message) {
         case 'translation':
             // 收到房间内其他用户的翻译结果
             if (message.fromUserId !== userInfo.userId && message.data) {
+                console.log(`📨 收到来自 ${message.fromUserId} 的翻译数据`);
                 try {
                     // 将base64数据转换回二进制
                     const binaryData = Uint8Array.from(atob(message.data), c => c.charCodeAt(0));
                     // 解析Protobuf消息
                     const parsedMessage = parseProtobufMessage(binaryData.buffer);
-                    if (parsedMessage && parsedMessage.event === 654 && parsedMessage.text) {
-                        // 显示在"对方的翻译"区域
-                        otherSubtitleManager.addSubtitle(parsedMessage.text);
+                    
+                    if (parsedMessage) {
+                        // 获取事件类型（支持字符串和数字两种格式）
+                        let eventType = parsedMessage.event;
+                        if (typeof eventType === 'string' && root) {
+                            const enumType = root.lookupEnum('data.speech.event.Type');
+                            if (enumType && enumType.values[eventType] !== undefined) {
+                                eventType = enumType.values[eventType];
+                            }
+                        }
+                        
+                        console.log(`📨 对方消息类型: ${eventType}`, parsedMessage);
+                        
+                        // 处理不同类型的消息
+                        switch (eventType) {
+                            case 654: // TranslationSubtitleResponse - 翻译字幕
+                            case 'TranslationSubtitleResponse':
+                                if (parsedMessage.text) {
+                                    console.log(`🌐 对方译文: ${parsedMessage.text}`);
+                                    otherSubtitleManager.appendText(parsedMessage.text);
+                                }
+                                break;
+                                
+                            case 651: // SourceSubtitleResponse - 原文字幕
+                            case 'SourceSubtitleResponse':
+                                // 可选：显示对方的原文
+                                break;
+                                
+                            case 352: // TTSResponse - 语音合成
+                            case 'TTSResponse':
+                                // 播放对方的翻译语音
+                                if (parsedMessage.data) {
+                                    console.log(`🔊 播放对方语音`);
+                                    playAudio(parsedMessage.data);
+                                }
+                                break;
+                        }
                     }
                 } catch (error) {
                     console.error('处理房间翻译消息失败:', error);
