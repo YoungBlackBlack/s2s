@@ -77,13 +77,18 @@ wss.on('connection', (clientWs, req) => {
     
     // 浏览器 -> 字节跳动 API（转发音频数据）
     clientWs.on('message', (data) => {
+        console.log(`[${userId}] 收到客户端消息, 大小: ${data.length} bytes, targetWs状态: ${targetWs.readyState}`);
         if (targetWs.readyState === WebSocket.OPEN) {
             targetWs.send(data);
+            console.log(`[${userId}] 已转发到字节跳动API`);
+        } else {
+            console.error(`[${userId}] 无法转发: targetWs 未连接 (状态: ${targetWs.readyState})`);
         }
     });
     
     // 字节跳动 API -> 浏览器（转发翻译结果）
     targetWs.on('message', (data) => {
+        console.log(`[${userId}] 收到字节跳动API响应, 大小: ${data.length} bytes`);
         if (clientWs.readyState === WebSocket.OPEN) {
             // 直接转发给客户端
             clientWs.send(data);
@@ -108,7 +113,7 @@ wss.on('connection', (clientWs, req) => {
     
     // 连接成功
     targetWs.on('open', () => {
-        console.log(`用户 ${userId} 已连接到字节跳动API`);
+        console.log(`[${userId}] ✅ 已成功连接到字节跳动API`);
         if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(JSON.stringify({
                 type: 'connected',
@@ -119,16 +124,16 @@ wss.on('connection', (clientWs, req) => {
     
     // 错误处理
     clientWs.on('error', (error) => {
-        console.error(`客户端 ${userId} 错误:`, error);
+        console.error(`[${userId}] 客户端错误:`, error.message || error);
         cleanupClient(clientId);
     });
     
     targetWs.on('error', (error) => {
-        console.error(`字节跳动API连接错误 (${userId}):`, error);
+        console.error(`[${userId}] ❌ 字节跳动API连接错误:`, error.message || error);
         if (clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(JSON.stringify({
                 type: 'error',
-                message: 'Translation service connection error'
+                message: `Translation service error: ${error.message || 'Unknown error'}`
             }));
         }
         cleanupClient(clientId);
@@ -140,8 +145,15 @@ wss.on('connection', (clientWs, req) => {
         cleanupClient(clientId);
     });
     
-    targetWs.on('close', () => {
-        console.log(`字节跳动API连接关闭 (${userId})`);
+    targetWs.on('close', (code, reason) => {
+        console.log(`[${userId}] 字节跳动API连接关闭, code: ${code}, reason: ${reason?.toString() || '无'}`);
+        if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify({
+                type: 'error',
+                message: `字节跳动API连接关闭 (code: ${code})`,
+                code: code
+            }));
+        }
         cleanupClient(clientId);
     });
     
