@@ -18,6 +18,12 @@ let userInfo = null;
 let currentRoomId = null;
 let wsProxyUrl = null; // Railway WebSocket代理服务器URL
 
+// 即构RTC相关变量
+let zegoEngine = null;
+let zegoStreamId = null;
+let zegoRoomId = null;
+let zegoConfig = null;
+
 // 字幕管理器（区分我的和对方的）
 // 流式显示：像 ChatGPT 一样逐字出现，同一句在一行
 const mySubtitleManager = {
@@ -450,7 +456,7 @@ async function startRecording() {
     try {
         updateStatus('正在连接...', 'connecting');
         
-        // 获取鉴权信息
+        // 获取字节跳动鉴权信息
         const response = await fetch('/api/auth');
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -461,7 +467,19 @@ async function startRecording() {
             throw new Error(auth.message || '鉴权信息获取失败：环境变量未配置');
         }
         
-        // 创建WebSocket连接
+        // 获取即构RTC配置
+        const zegoResponse = await fetch('/api/zego-auth');
+        if (!zegoResponse.ok) {
+            console.warn('⚠️ 即构配置获取失败，将仅使用WebSocket模式');
+        } else {
+            zegoConfig = await zegoResponse.json();
+            if (zegoConfig.appId && zegoConfig.appSign) {
+                // 初始化即构RTC
+                await initZegoRTC(zegoConfig);
+            }
+        }
+        
+        // 创建WebSocket连接（用于字节跳动翻译）
         await connectWebSocket(auth);
         
         // 获取麦克风权限
@@ -483,6 +501,16 @@ async function startRecording() {
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         source.connect(analyser);
+        
+        // 如果即构RTC已初始化，发布音频流
+        if (zegoEngine && zegoStreamId) {
+            try {
+                await zegoEngine.startPublishingStream(zegoStreamId, mediaStream);
+                console.log('✅ 即构RTC音频流发布成功');
+            } catch (error) {
+                console.error('即构RTC发布失败:', error);
+            }
+        }
         
         // 开始发送音频数据
         isRecording = true;
@@ -507,6 +535,16 @@ async function startRecording() {
 function stopRecording() {
     isRecording = false;
     
+    // 停止即构RTC音频流
+    if (zegoEngine && zegoStreamId) {
+        try {
+            zegoEngine.stopPublishingStream(zegoStreamId);
+            console.log('✅ 即构RTC音频流已停止');
+        } catch (error) {
+            console.error('停止即构RTC流失败:', error);
+        }
+    }
+    
     // 停止音频流
     if (mediaStream) {
         mediaStream.getTracks().forEach(track => track.stop());
@@ -530,6 +568,151 @@ function stopRecording() {
     document.getElementById('recordBtn').querySelector('.btn-text').textContent = '开始';
     document.getElementById('waveform-canvas').classList.remove('active');
     updateStatus('已停止', 'ready');
+}
+
+// ===== 即构RTC初始化 =====
+async function initZegoRTC(config) {
+    try {
+        // 检查即构SDK是否已加载
+        if (typeof ZegoExpressEngine === 'undefined') {
+            console.warn('⚠️ 即构SDK未加载，跳过RTC初始化');
+            return;
+        }
+        
+        // 创建即构引擎实例
+        zegoEngine = new ZegoExpressEngine(config.appId, config.appSign);
+        
+        // 设置房间事件监听
+        zegoEngine.on('roomUserUpdate', (roomID, updateType, userList) => {
+            console.log('即构房间用户更新:', roomID, updateType, userList);
+            userList.forEach(user => {
+                if (updateType === 'ADD') {
+                    console.log(`用户 ${user.userID} 加入房间`);
+                    updateRoomStatus(`${user.userID} 已加入`, true);
+                    // 订阅新用户的音频流
+                    subscribeToUserStream(user.userID);
+                } else if (updateType === 'DELETE') {
+                    console.log(`用户 ${user.userID} 离开房间`);
+                    updateRoomStatus('对方已离开', false);
+                    // 取消订阅
+                    if (zegoEngine) {
+                        zegoEngine.stopPlayingStream(`stream_${user.userID}`);
+                    }
+                }
+            });
+        });
+        
+        // 监听流更新事件
+        zegoEngine.on('roomStreamUpdate', (roomID, updateType, streamList) => {
+            console.log('即构房间流更新:', roomID, updateType, streamList);
+            streamList.forEach(stream => {
+                // 忽略自己的流
+                if (stream.streamID === zegoStreamId) {
+                    return;
+                }
+                
+                if (updateType === 'ADD') {
+                    // 订阅新流（自动播放音频）
+                    zegoEngine.startPlayingStream(stream.streamID).then(() => {
+                        console.log('✅ 已订阅并播放即构音频流:', stream.streamID);
+                    }).catch(error => {
+                        console.error('订阅即构流失败:', error);
+                    });
+                } else if (updateType === 'DELETE') {
+                    // 停止播放流
+                    zegoEngine.stopPlayingStream(stream.streamID);
+                    console.log('✅ 已停止播放即构音频流:', stream.streamID);
+                }
+            });
+        });
+        
+        // 监听自定义消息（翻译结果）
+        zegoEngine.on('receiveCustomCommand', (fromUser, command) => {
+            console.log('📨 收到即构自定义消息:', fromUser, command);
+            handleZegoCustomMessage(fromUser, command);
+        });
+        
+        // 登录房间
+        zegoRoomId = currentRoomId || `room_${Date.now()}`;
+        zegoStreamId = `stream_${userInfo.userId}_${Date.now()}`;
+        
+        const loginResult = await zegoEngine.loginRoom(
+            zegoRoomId,
+            null, // token，如果使用AppSign则传null
+            {
+                userID: userInfo.userId,
+                userName: userInfo.userName || userInfo.userId
+            },
+            {
+                userUpdate: true
+            }
+        );
+        
+        if (loginResult === 0) {
+            console.log('✅ 即构RTC登录成功，房间ID:', zegoRoomId);
+            updateStatus('RTC已连接', 'connected');
+        } else {
+            console.error('❌ 即构RTC登录失败，错误码:', loginResult);
+            throw new Error(`即构RTC登录失败: ${loginResult}`);
+        }
+        
+    } catch (error) {
+        console.error('即构RTC初始化失败:', error);
+        // 不抛出错误，允许降级到纯WebSocket模式
+        zegoEngine = null;
+    }
+}
+
+// ===== 订阅用户音频流 =====
+async function subscribeToUserStream(userId) {
+    if (!zegoEngine) return;
+    
+    const streamId = `stream_${userId}`;
+    await subscribeToStream(streamId);
+}
+
+// ===== 订阅音频流 =====
+async function subscribeToStream(streamId) {
+    if (!zegoEngine) return;
+    
+    try {
+        // 订阅流（即构SDK会自动处理音频播放）
+        // 注意：即构SDK内部会创建MediaStream并自动播放，不需要手动创建audio元素
+        await zegoEngine.startPlayingStream(streamId);
+        
+        console.log('✅ 已订阅即构音频流:', streamId);
+    } catch (error) {
+        console.error('订阅即构流失败:', error);
+    }
+}
+
+// ===== 处理即构自定义消息（翻译结果）=====
+function handleZegoCustomMessage(fromUser, command) {
+    try {
+        // 忽略自己发送的消息
+        if (fromUser.userID === userInfo.userId) {
+            return;
+        }
+        
+        // 解析命令数据
+        const data = typeof command === 'string' ? JSON.parse(command) : command;
+        
+        if (data.type === 'translation') {
+            // 处理翻译字幕
+            if (data.subtitle && data.subtitle.text) {
+                console.log(`🌐 对方译文: ${data.subtitle.text}`);
+                otherSubtitleManager.appendText(data.subtitle.text);
+            }
+            
+            // 处理翻译音频
+            if (data.audio && data.audio.data) {
+                console.log('🔊 播放对方翻译语音');
+                playAudio(data.audio.data);
+            }
+        }
+    } catch (error) {
+        console.error('处理即构自定义消息失败:', error);
+    }
 }
 
 // ===== WebSocket连接 =====
@@ -794,6 +977,15 @@ function handleWebSocketMessage(data) {
             if (message.text) {
                 console.log('🌐 我的译文:', message.text);
                 mySubtitleManager.appendText(message.text);
+                
+                // 通过即构RTC广播翻译字幕给房间内其他用户
+                broadcastTranslationToRoom({
+                    type: 'translation',
+                    subtitle: {
+                        text: message.text,
+                        eventType: eventType
+                    }
+                });
             }
         }
         else if (isEvent(eventType, 352, 'TTSResponse')) {
@@ -802,6 +994,27 @@ function handleWebSocketMessage(data) {
             // 只有对方的语音才会播放（通过房间广播接收）
             if (message.data) {
                 console.log('🎤 收到自己的语音数据（不播放，避免回音）');
+                
+                // 通过即构RTC广播翻译音频给房间内其他用户
+                // 将音频数据转换为base64以便传输
+                let audioBase64 = null;
+                if (typeof message.data === 'string') {
+                    audioBase64 = message.data; // 已经是base64
+                } else if (message.data instanceof ArrayBuffer || message.data instanceof Uint8Array) {
+                    const uint8Array = message.data instanceof ArrayBuffer ? new Uint8Array(message.data) : message.data;
+                    const binaryString = String.fromCharCode.apply(null, uint8Array);
+                    audioBase64 = btoa(binaryString);
+                }
+                
+                if (audioBase64) {
+                    broadcastTranslationToRoom({
+                        type: 'translation',
+                        audio: {
+                            data: audioBase64,
+                            eventType: eventType
+                        }
+                    });
+                }
             }
         }
         else if (isEvent(eventType, 154, 'UsageResponse') || isEvent(eventType, 154, 'ChargeData')) {
@@ -819,6 +1032,27 @@ function handleWebSocketMessage(data) {
         }
     } catch (error) {
         console.error('处理消息失败:', error);
+    }
+}
+
+// ===== 通过即构RTC广播翻译结果 =====
+function broadcastTranslationToRoom(data) {
+    if (!zegoEngine || !zegoRoomId) {
+        // 如果没有即构RTC，降级到代理服务器广播（如果可用）
+        return;
+    }
+    
+    try {
+        // 发送自定义消息到房间
+        zegoEngine.sendCustomCommand(zegoRoomId, JSON.stringify(data), (result) => {
+            if (result.errorCode === 0) {
+                console.log('✅ 翻译结果已通过即构RTC广播');
+            } else {
+                console.error('❌ 即构RTC广播失败:', result.errorCode, result.extendedData);
+            }
+        });
+    } catch (error) {
+        console.error('即构RTC广播异常:', error);
     }
 }
 

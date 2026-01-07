@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>即构RTC测试工具</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .warning {
+            color: #ffc107;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .log-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007AFF;
+            padding-left: 10px;
+        }
+        .log-item.success {
+            border-left-color: #28a745;
+        }
+        .log-item.error {
+            border-left-color: #dc3545;
+        }
+        .log-item.warning {
+            border-left-color: #ffc107;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+            width: 300px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 即构RTC集成测试工具</h1>
+
+    <!-- 测试1: API端点测试 -->
+    <div class="test-section">
+        <h2>1. API端点测试</h2>
+        <button onclick="testZegoAuthAPI()">测试即构鉴权API</button>
+        <button onclick="testByteDanceAuthAPI()">测试字节跳动鉴权API</button>
+        <div id="api-result"></div>
+    </div>
+
+    <!-- 测试2: SDK加载测试 -->
+    <div class="test-section">
+        <h2>2. SDK加载测试</h2>
+        <button onclick="testSDKLoad()">检查即构SDK</button>
+        <button onclick="testProtobufLoad()">检查Protobuf库</button>
+        <div id="sdk-result"></div>
+    </div>
+
+    <!-- 测试3: 即构RTC连接测试 -->
+    <div class="test-section">
+        <h2>3. 即构RTC连接测试</h2>
+        <input type="text" id="roomId" placeholder="房间ID（留空自动生成）" />
+        <button onclick="testZegoConnection()">测试连接</button>
+        <button onclick="testZegoDisconnect()">断开连接</button>
+        <div id="zego-result"></div>
+    </div>
+
+    <!-- 测试4: 音频流测试 -->
+    <div class="test-section">
+        <h2>4. 音频流测试</h2>
+        <button onclick="testAudioStream()">测试音频流发布</button>
+        <button onclick="testStopAudio()">停止音频流</button>
+        <div id="audio-result"></div>
+    </div>
+
+    <!-- 测试5: 自定义消息测试 -->
+    <div class="test-section">
+        <h2>5. 自定义消息测试（翻译广播）</h2>
+        <input type="text" id="testMessage" placeholder="测试消息内容" value="Hello, 这是测试消息" />
+        <button onclick="testCustomMessage()">发送测试消息</button>
+        <div id="message-result"></div>
+    </div>
+
+    <!-- 日志区域 -->
+    <div class="test-section">
+        <h2>📋 测试日志</h2>
+        <button onclick="clearLogs()">清空日志</button>
+        <div id="logs" class="log"></div>
+    </div>
+
+    <!-- 加载即构SDK -->
+    <script src="https://lib.zego.im/express/zego-express-engine-webrtc-3.0.0.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.5/dist/protobuf.min.js"></script>
+
+    <script>
+        let zegoEngine = null;
+        let zegoStreamId = null;
+        let zegoRoomId = null;
+        let zegoConfig = null;
+        let mediaStream = null;
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const item = document.createElement('div');
+            item.className = `log-item ${type}`;
+            const time = new Date().toLocaleTimeString();
+            item.textContent = `[${time}] ${message}`;
+            logsDiv.appendChild(item);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        // 测试1: 即构鉴权API
+        async function testZegoAuthAPI() {
+            const resultDiv = document.getElementById('api-result');
+            resultDiv.innerHTML = '<p>测试中...</p>';
+            log('开始测试即构鉴权API...', 'info');
+
+            try {
+                const response = await fetch('/api/zego-auth');
+                const data = await response.json();
+
+                if (response.ok && data.appId && data.appSign) {
+                    zegoConfig = data;
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ API测试成功</p>
+                        <p><strong>AppID:</strong> ${data.appId}</p>
+                        <p><strong>AppSign:</strong> ${data.appSign.substring(0, 20)}...</p>
+                        <p><strong>ServerSecret:</strong> ${data.serverSecret ? '已配置' : '未配置'}</p>
+                    `;
+                    log('即构鉴权API测试成功', 'success');
+                } else {
+                    resultDiv.innerHTML = `<p class="error">❌ API测试失败: ${data.message || '未知错误'}</p>`;
+                    log(`即构鉴权API测试失败: ${JSON.stringify(data)}`, 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ 请求失败: ${error.message}</p>`;
+                log(`即构鉴权API请求失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 测试字节跳动鉴权API
+        async function testByteDanceAuthAPI() {
+            log('开始测试字节跳动鉴权API...', 'info');
+            try {
+                const response = await fetch('/api/auth');
+                const data = await response.json();
+                if (response.ok) {
+                    log('字节跳动鉴权API测试成功', 'success');
+                } else {
+                    log(`字节跳动鉴权API测试失败: ${JSON.stringify(data)}`, 'error');
+                }
+            } catch (error) {
+                log(`字节跳动鉴权API请求失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 测试2: SDK加载
+        function testSDKLoad() {
+            const resultDiv = document.getElementById('sdk-result');
+            const sdkLoaded = typeof ZegoExpressEngine !== 'undefined';
+            
+            if (sdkLoaded) {
+                resultDiv.innerHTML = '<p class="success">✅ 即构SDK已加载</p>';
+                log('即构SDK检查成功', 'success');
+            } else {
+                resultDiv.innerHTML = '<p class="error">❌ 即构SDK未加载</p>';
+                log('即构SDK未加载，请检查CDN链接', 'error');
+            }
+        }
+
+        function testProtobufLoad() {
+            const pbLoaded = typeof protobuf !== 'undefined';
+            if (pbLoaded) {
+                log('Protobuf库检查成功', 'success');
+            } else {
+                log('Protobuf库未加载', 'error');
+            }
+        }
+
+        // 测试3: 即构RTC连接
+        async function testZegoConnection() {
+            const resultDiv = document.getElementById('zego-result');
+            resultDiv.innerHTML = '<p>连接中...</p>';
+
+            // 先获取配置
+            if (!zegoConfig) {
+                log('先获取即构配置...', 'info');
+                await testZegoAuthAPI();
+            }
+
+            if (!zegoConfig || !zegoConfig.appId || !zegoConfig.appSign) {
+                resultDiv.innerHTML = '<p class="error">❌ 即构配置未获取，请先测试API</p>';
+                return;
+            }
+
+            if (typeof ZegoExpressEngine === 'undefined') {
+                resultDiv.innerHTML = '<p class="error">❌ 即构SDK未加载</p>';
+                return;
+            }
+
+            try {
+                zegoEngine = new ZegoExpressEngine(zegoConfig.appId, zegoConfig.appSign);
+                
+                // 设置事件监听
+                zegoEngine.on('roomUserUpdate', (roomID, updateType, userList) => {
+                    log(`房间用户更新: ${roomID}, ${updateType}, 用户数: ${userList.length}`, 'info');
+                });
+
+                zegoEngine.on('roomStreamUpdate', (roomID, updateType, streamList) => {
+                    log(`房间流更新: ${roomID}, ${updateType}, 流数: ${streamList.length}`, 'info');
+                });
+
+                zegoEngine.on('receiveCustomCommand', (fromUser, command) => {
+                    log(`收到自定义消息: 来自 ${fromUser.userID}, 内容: ${JSON.stringify(command)}`, 'success');
+                });
+
+                // 登录房间
+                zegoRoomId = document.getElementById('roomId').value || `test_room_${Date.now()}`;
+                const userId = `test_user_${Date.now()}`;
+                zegoStreamId = `stream_${userId}`;
+
+                log(`尝试登录房间: ${zegoRoomId}, 用户ID: ${userId}`, 'info');
+                const loginResult = await zegoEngine.loginRoom(
+                    zegoRoomId,
+                    null,
+                    {
+                        userID: userId,
+                        userName: '测试用户'
+                    },
+                    {
+                        userUpdate: true
+                    }
+                );
+
+                if (loginResult === 0) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ 即构RTC连接成功</p>
+                        <p><strong>房间ID:</strong> ${zegoRoomId}</p>
+                        <p><strong>流ID:</strong> ${zegoStreamId}</p>
+                    `;
+                    log('即构RTC连接成功', 'success');
+                } else {
+                    resultDiv.innerHTML = `<p class="error">❌ 登录失败，错误码: ${loginResult}</p>`;
+                    log(`即构RTC登录失败，错误码: ${loginResult}`, 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ 连接失败: ${error.message}</p>`;
+                log(`即构RTC连接失败: ${error.message}`, 'error');
+            }
+        }
+
+        function testZegoDisconnect() {
+            if (zegoEngine && zegoRoomId) {
+                zegoEngine.logoutRoom(zegoRoomId);
+                zegoEngine = null;
+                zegoRoomId = null;
+                zegoStreamId = null;
+                log('已断开即构RTC连接', 'info');
+                document.getElementById('zego-result').innerHTML = '<p>已断开连接</p>';
+            }
+        }
+
+        // 测试4: 音频流
+        async function testAudioStream() {
+            const resultDiv = document.getElementById('audio-result');
+            
+            if (!zegoEngine || !zegoStreamId) {
+                resultDiv.innerHTML = '<p class="error">❌ 请先连接即构RTC</p>';
+                return;
+            }
+
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+
+                await zegoEngine.startPublishingStream(zegoStreamId, mediaStream);
+                resultDiv.innerHTML = '<p class="success">✅ 音频流发布成功</p>';
+                log('音频流发布成功', 'success');
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ 音频流发布失败: ${error.message}</p>`;
+                log(`音频流发布失败: ${error.message}`, 'error');
+            }
+        }
+
+        function testStopAudio() {
+            if (zegoEngine && zegoStreamId) {
+                zegoEngine.stopPublishingStream(zegoStreamId);
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+                log('音频流已停止', 'info');
+                document.getElementById('audio-result').innerHTML = '<p>音频流已停止</p>';
+            }
+        }
+
+        // 测试5: 自定义消息
+        async function testCustomMessage() {
+            const resultDiv = document.getElementById('message-result');
+            const message = document.getElementById('testMessage').value;
+
+            if (!zegoEngine || !zegoRoomId) {
+                resultDiv.innerHTML = '<p class="error">❌ 请先连接即构RTC</p>';
+                return;
+            }
+
+            try {
+                const command = {
+                    type: 'translation',
+                    subtitle: {
+                        text: message,
+                        eventType: 654
+                    },
+                    timestamp: Date.now()
+                };
+
+                zegoEngine.sendCustomCommand(zegoRoomId, JSON.stringify(command), (result) => {
+                    if (result.errorCode === 0) {
+                        resultDiv.innerHTML = '<p class="success">✅ 自定义消息发送成功</p>';
+                        log('自定义消息发送成功', 'success');
+                    } else {
+                        resultDiv.innerHTML = `<p class="error">❌ 发送失败，错误码: ${result.errorCode}</p>`;
+                        log(`自定义消息发送失败，错误码: ${result.errorCode}`, 'error');
+                    }
+                });
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ 发送失败: ${error.message}</p>`;
+                log(`自定义消息发送异常: ${error.message}`, 'error');
+            }
+        }
+
+        // 页面加载时自动检查SDK
+        window.addEventListener('load', () => {
+            log('测试工具已加载', 'success');
+            testSDKLoad();
+            testProtobufLoad();
+        });
+    </script>
+</body>
+</html>
+

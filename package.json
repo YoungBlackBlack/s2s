@@ -16,7 +16,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "protobufjs": "^7.2.5"
+    "protobufjs": "^7.2.5",
+    "zego-express-engine-webrtc": "^3.0.0"
   },
   "devDependencies": {
     "@vercel/node": "^3.0.0",
